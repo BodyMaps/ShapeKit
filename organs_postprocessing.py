@@ -1,0 +1,589 @@
+from utils import *
+
+data_type = np.int16
+from config import class_map, organ_adjacency_map
+
+
+
+
+
+
+def post_processing_liver(segmentation_dict):
+    """
+    Post-processing for liver.
+    
+    Main problems for liver:
+        * artifacts
+        * holes 
+        * disconnected parts
+    """
+    liver_mask = segmentation_dict['liver'].copy()
+    
+    # keep only the largest components
+    cleaned_liver_mask =  suppress_non_largest_components_binary(liver_mask, keep_top=3)
+    
+    # Update
+    segmentation_dict['liver'] = cleaned_liver_mask
+
+    return segmentation_dict
+
+
+def post_processing_pancreas(segmentation_dict, dice_threshold=0.05):
+    """
+    Post-processing for pancreas. 
+    
+    Main problems for pancreas:
+        * artifacts
+        * incomplete construction
+    
+    In some cases, there are large artifacts that will influence the surppass process
+    in a heavy scale. Hence, need to compare with other organ parts (tail, body, head).
+    """
+
+    pancreas_mask = segmentation_dict['pancreas'].copy()
+    try:    # is pancreas sub-parts exist, check with 
+
+        head_mask     = segmentation_dict['pancreas_head']
+        body_mask     = segmentation_dict['pancreas_body']
+        tail_mask     = segmentation_dict['pancreas_tail']
+
+        # Combine parts
+        combined_parts_mask = ((head_mask + body_mask + tail_mask) > 0).astype(data_type)
+        dice = soft_dice(pancreas_mask, combined_parts_mask)
+        
+        if dice > dice_threshold:
+            # uppress non largest components
+            new_pancreas_mask = suppress_non_largest_components_binary(pancreas_mask)
+
+        else:
+            # replace with combined one
+            new_pancreas_mask = combined_parts_mask
+
+    except:
+        
+        new_pancreas_mask = suppress_non_largest_components_binary(pancreas_mask, keep_top=2)
+
+    
+    # update
+    segmentation_dict['pancreas'] = new_pancreas_mask
+    
+    return segmentation_dict
+
+
+def post_processing_colon(segmentation_dict):
+    """
+    Post-processing for colons. 
+    
+    Main problems for pancreas:
+        * small artifacts
+        * redundant structure
+    """
+    colon_mask = segmentation_dict['colon'].copy()
+
+    # remove small artifacts
+    cleaned_colon_mask = remove_small_components(colon_mask, threshold=np.sum(colon_mask)/10)
+
+    # re-insert
+    segmentation_dict['colon'] = cleaned_colon_mask
+    
+    return segmentation_dict
+
+
+
+def post_processing_stomach(segmentation_dict):
+    """
+    Post processing for stomach.
+
+        * in some cases, there are food inside stomach, therefore needs to fill
+
+        
+    """
+    stomach_mask = segmentation_dict['stomach'].copy()
+
+    # detect weather it is filled with food
+    stomach_mask_filled = fill_holes_3d(stomach_mask)
+
+    if np.sum(stomach_mask_filled) < 2 * np.sum(stomach_mask):
+        # needs to fill
+        stomach_mask = stomach_mask_filled
+    
+    cleaned_stomach_mask = remove_small_components(mask=stomach_mask, threshold=np.sum(stomach_mask) / 10)
+
+    segmentation_dict['stomach'] = cleaned_stomach_mask
+
+    return segmentation_dict
+
+
+    
+def post_processing_spleen(segmentation_dict):
+    """
+    Post-prcessing for spleen.
+
+    Main problems for spleen:
+        * artifacts
+        * disconnected
+    """
+    spleen_mask = segmentation_dict['spleen'].copy()
+
+    cleaned_spleen_mask = suppress_non_largest_components_binary(spleen_mask, 2)
+
+    segmentation_dict['spleen'] = cleaned_spleen_mask
+
+    return segmentation_dict
+
+
+def check_z_reverse(segmentation_dict, AXIS_Z, check_organ_1='kidney_left', check_organ_2='lung_left')->bool:
+    """
+    Outdated Warning
+    """
+    kidney_mask = segmentation_dict.get(check_organ_1)
+    lung_mask = segmentation_dict.get(check_organ_2)
+
+    if kidney_mask is None or not np.any(kidney_mask):
+        print("[WARNING] Kidney mask not found or empty. Skipping z check.")
+        return False
+
+    if lung_mask is None or not np.any(lung_mask):
+        print("[WARNING] Lung mask not found or empty. Use stomach instead.")
+        lung_mask = segmentation_dict.get('stomach')
+        
+
+    # Detect Z-axis direction
+    lung_z = np.mean(np.argwhere(lung_mask)[:, AXIS_Z])
+    kidney_z = np.mean(np.argwhere(kidney_mask)[:, AXIS_Z])
+    reversed_z = lung_z > kidney_z  # Normally lung_z(stomach) < kidney_z in CTs
+
+    
+    return reversed_z
+
+
+def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, reference='kidney_left'):
+    """
+    Check some extreme oragn locations
+
+    suitable for femur, bladder and prostate. set kidney as reference.
+    
+    """
+
+    kidney_mask = segmentation_dict.get(reference)
+    reversed_z = check_z_reverse(segmentation_dict, AXIS_Z)
+    print(f"[INFO] Checking {organ_name}..., Z-axis reversed: {reversed_z}")
+
+    kidney_z_min = np.min(np.argwhere(kidney_mask)[:, AXIS_Z])
+
+    # Prepare to filter femur voxels
+    corrected_organ_mask = organ_mask.copy()
+    organ_coords = np.argwhere(organ_mask)
+
+    for coord in organ_coords:
+        z = coord[AXIS_Z]
+        if (not reversed_z and z < kidney_z_min) or (reversed_z and z > kidney_z_min):
+            corrected_organ_mask[tuple(coord)] = 0
+
+    removed_voxels = np.sum(organ_mask) - np.sum(corrected_organ_mask)
+    if removed_voxels > 0:
+        print(f"[INFO] Removed {removed_voxels} invalid {organ_name} voxels above reference {reference}")
+
+    return corrected_organ_mask
+
+
+def post_processing_femur(segmentation_dict: dict, axis_map: dict, calibration_standards_mask: np.ndarray) -> dict:
+    """
+    Post-processing for right and left femur masks stored in a segmentation_dict.
+    
+    """
+    # Get masks
+    femur_right = segmentation_dict.get("femur_right", None)
+    femur_left = segmentation_dict.get("femur_left", None)
+
+    if femur_right is None or femur_left is None:
+        print("[WARNING] Femur masks not found in segmentation_dict.")
+        return segmentation_dict
+
+    # Merge and clean
+    femur_mask = ((femur_left > 0) | (femur_right > 0)).astype(np.uint8)
+
+    femur_mask =  check_organ_location(segmentation_dict, femur_mask, 'femur', axis_map['z'])
+
+    # set as 0
+    if not np.any(femur_mask):
+
+        right_mask = np.zeros(shape=femur_left.shape)
+        left_mask = np.zeros(shape=femur_right.shape)
+        segmentation_dict['femur_right'] = right_mask
+        segmentation_dict['femur_left'] = left_mask
+
+        return segmentation_dict
+
+    # first step cleaning
+    cleaned_mask = remove_small_components(femur_mask, np.sum(femur_mask)/10)
+
+    # Split right / left
+    right_mask, left_mask = split_right_left(mask=cleaned_mask, AXIS=axis_map['x'])
+
+    # Reassign if needed using liver
+    right_mask, left_mask = reassign_left_right_based_on_liver(
+        right_mask,
+        left_mask,
+        liver_mask=calibration_standards_mask
+    )
+
+    # Update dictionary
+    segmentation_dict['femur_right'] = right_mask
+    segmentation_dict['femur_left'] = left_mask
+
+    return segmentation_dict
+
+
+def post_processing_kidney(segmentation_dict: dict, axis_map: dict, calibration_standards_mask: np.ndarray) -> dict:
+    """
+    Post-prcessing for right and left kidney.
+
+    Main problems for kidney:
+        * artifacts
+        * holes
+        * right / left not fully seperated
+    """
+
+    kidney_left = segmentation_dict.get("kidney_left", None)
+    kidney_right = segmentation_dict.get("kidney_right", None)
+
+    if kidney_left is None or kidney_right is None:
+        print("[WARNING] Kidney masks not found in segmentation_dict.")
+        return segmentation_dict
+
+    # Combine and clean
+    kidney_mask = ((kidney_left > 0) | (kidney_right > 0)).astype(np.uint8)
+    cleaned_kidney_mask = remove_small_components(kidney_mask, threshold=np.sum(kidney_mask) / 10)
+
+    # Split left/right
+    right_mask, left_mask = split_right_left(cleaned_kidney_mask, AXIS=axis_map['x'])
+
+    # Reassign if necessary using liver reference
+    right_mask, left_mask = reassign_left_right_based_on_liver(
+        right_mask,
+        left_mask,
+        liver_mask=calibration_standards_mask
+    )
+
+    # Keep only largest component per side
+    right_mask = suppress_non_largest_components_binary(right_mask, keep_top=1)
+    left_mask = suppress_non_largest_components_binary(left_mask, keep_top=1)
+
+    # Update dict
+    segmentation_dict['kidney_left'] = left_mask
+    segmentation_dict['kidney_right'] = right_mask
+
+    return segmentation_dict
+
+
+
+# the biggest problem is here, how to deal with the extreme-shape problem with lung?
+
+def post_processing_lung_v2(segmentation_dict, axis_map, 
+                              target_label: str = 'lung_left', fallback_label: str = 'colon', min_size: int = 50):
+    """
+    @ dongli he 
+
+    Post-processing for mislabelled lung components based on anatomical constraints.
+
+    Returns:
+        dict: Updated segmentation dictionary.
+    """
+
+    assert target_label in ['lung_left', 'lung_right'], "Target must be 'lung_left' or 'lung_right'"
+    lung_mask = segmentation_dict.get(target_label, None)
+
+    # use kidney and stomach to judege whether z is in a reversed sequence
+    reversed_z = check_z_reverse(
+        segmentation_dict, 
+        axis_map['z'],
+        check_organ_1='kidney_left',
+        check_organ_2='stomach')
+
+    if lung_mask is None or not np.any(lung_mask):
+        return segmentation_dict
+
+    # Combine reference organs for lower Z-bound check
+    reference_mask = (
+        segmentation_dict.get('liver', 0) |
+        segmentation_dict.get('spleen', 0) |
+        segmentation_dict.get('stomach', 0)
+    ).astype(np.uint8)
+
+    if not np.any(reference_mask):
+        print(f"[INFO] Reference organs not found for {target_label}. Skipping.")
+        return segmentation_dict
+
+
+    Z = axis_map['z']
+    z_lower_bound = np.mean(np.argwhere(reference_mask)[:, Z])
+
+    cc_map = cc3d.connected_components(lung_mask, connectivity=6)
+    new_lung_mask = np.zeros_like(lung_mask, dtype=np.uint8)
+    fallback_mask = segmentation_dict.get(fallback_label, np.zeros_like(lung_mask, dtype=np.uint8))
+
+    # filter out the extreme cases
+    for cc_id in np.unique(cc_map):
+        if cc_id == 0 or np.sum(cc_map == cc_id) < min_size:
+            continue
+        
+        coords = np.argwhere(cc_map == cc_id)
+
+        z_max = np.max(coords[:, Z])
+
+        if (reversed_z and z_max < z_lower_bound) or (not reversed_z and z_max > z_lower_bound):
+            fallback_mask[tuple(coords.T)] = 1
+            print(f"[INFO] Reassigned {target_label} component to {fallback_label}")
+        else:
+            new_lung_mask[cc_map == cc_id] = 1
+
+
+    segmentation_dict[target_label] = new_lung_mask
+    segmentation_dict[fallback_label] = fallback_mask
+
+    return segmentation_dict
+
+
+
+
+def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_standards_mask: np.ndarray) -> dict:
+    """
+    Post-prcessing for right and left lung.
+
+    Main problems for lung:
+        * right / left not fully seperated
+
+    
+    ** extreme cases:
+        -- in some situation, there are some severely mislabelled lung,
+                use anatomical constraints to re-assign
+            
+    """
+    
+    # for the case lung is not in the abdominal reference area
+    segmentation_dict = post_processing_lung_v2(segmentation_dict, axis_map, 'lung_left')
+    segmentation_dict = post_processing_lung_v2(segmentation_dict, axis_map, 'lung_right')
+
+    lung_left = segmentation_dict.get("lung_left", None)
+    lung_right = segmentation_dict.get("lung_right", None)
+
+    if lung_left is None or lung_right is None:
+        print("[WARNING] Missing lung_left or lung_right in segmentation_dict.")
+        return segmentation_dict
+
+    lung_mask = ((lung_left > 0) | (lung_right > 0)).astype(np.uint16)
+    lung_mask = suppress_non_largest_components_binary(lung_mask, keep_top=2)
+
+
+    # If lung got fully reassigned
+    if np.sum(lung_mask) == 0:
+        print("[INFO] No valid lung remaining after reassignment. Skipping lung post-processing.")
+        segmentation_dict['lung_left'] = np.zeros_like(lung_mask, dtype=np.uint8)
+        segmentation_dict['lung_right'] = np.zeros_like(lung_mask, dtype=np.uint8)
+        return segmentation_dict
+
+    # Split left and right lungs
+    right_mask, left_mask = split_right_left(lung_mask, AXIS=axis_map['x'])
+
+    # Fallback split if unbalanced
+    volume_ratio = np.sum(right_mask) / (np.sum(left_mask) + 1e-5)
+    if volume_ratio > 2 or volume_ratio < 0.5:
+        print("[INFO] Unbalanced lung split detected. Using fallback split_organ().")
+        right_mask, left_mask = split_organ(mask=lung_mask, axis=axis_map['x'])
+
+    # Align left/right assignment based on liver position
+    right_mask, left_mask = reassign_left_right_based_on_liver(
+        right_mask,
+        left_mask,
+        liver_mask=calibration_standards_mask
+    )
+
+    # Clean small artifacts
+    right_mask = remove_small_components(right_mask, threshold=np.sum(right_mask) / 10)
+    left_mask = remove_small_components(left_mask, threshold=np.sum(left_mask) / 10)
+
+    # Update dict
+    segmentation_dict['lung_left'] = left_mask
+    segmentation_dict['lung_right'] = right_mask
+
+    return segmentation_dict
+
+
+
+def post_processing_bladder_prostate(segmentation_dict:dict, segmentation:np.array, axis=2):
+    """
+    Post-processing for bladder and prostate.
+
+    Keeps components that:
+        - Fall within the Z range between kidneys and femurs (regardless of axis direction)
+        - For prostate: must lie below the bladder in Z
+    """
+    target_organs = ['bladder', 'prostate']
+
+    for organ in target_organs:
+        organ_mask = segmentation_dict.get(organ).copy()
+        organ_mask = remove_small_components(organ_mask, np.sum(organ_mask)/10)
+        if np.sum(organ_mask) == 0:
+            continue
+        
+        # check location
+        cleaned_mask = check_organ_location(segmentation_dict, organ_mask, 
+                                            organ_name=organ, AXIS_Z=axis)
+
+        segmentation_dict[organ] = cleaned_mask
+        
+    return segmentation_dict
+
+
+def post_processing_aorta_postcava(segmentation_dict:dict):
+    """
+    Post-processing for aorta and postcava.
+
+    Main errors:
+        * small artifacts
+    
+    """
+
+    target_organs = ['aorta', 'postcava']
+    for organ in target_organs:
+        organ_mask = segmentation_dict.get(organ)
+        cleaned_organ_mask = remove_small_components(organ_mask,np.sum(organ_mask)/10)
+        segmentation_dict[organ] = cleaned_organ_mask
+
+    return segmentation_dict
+
+
+
+def reassign_FalsePositives(segmentation_dict:dict, organ_adjacency_map:dict, check_size_threshold = 500):
+    """
+    Reassign false positives between anatomically adjacent organs.
+
+        For each organ:
+        - Keep top 5 connected components
+        - For each component, compare its center to its own organ center
+            vs centers of adjacent organs
+        - If it's closer to an adjacent organ → reassign the component
+    """
+
+
+    organ_centers = {}
+    organ_masks = {}
+
+    # Clean and cache centers
+    for organ in organ_adjacency_map:
+        mask = segmentation_dict.get(organ, None)
+        if mask is None or np.sum(mask) == 0:
+            continue
+        
+        # mask = suppress_non_largest_components_binary(mask, keep_top=5)
+        center = compute_center(mask)
+
+        if center is not None:
+            organ_masks[organ] = mask
+            organ_centers[organ] = center
+
+    # Process each organ's components
+    for organ, mask in organ_masks.items():
+        organ_center = organ_centers[organ]
+        if organ_center is None:
+            continue
+
+        cc_map = cc3d.connected_components(mask, connectivity=6)
+        updated_mask = np.zeros_like(mask)
+
+        for cc_id in np.unique(cc_map):
+            if cc_id == 0:
+                continue
+
+            cc_mask = (cc_map == cc_id)
+            # skip the smaller ones
+            if np.sum(cc_mask) < check_size_threshold:
+                continue
+            cc_center = compute_center(cc_mask)
+            if cc_center is None:
+                continue
+
+
+            # Vectorized distance computation to all adjacent organ centers
+            adj_organs = [adj for adj in organ_adjacency_map[organ] if adj in organ_centers]
+            if not adj_organs:
+                updated_mask[cc_mask] = 1
+                continue
+
+            adj_centers = np.array([organ_centers[adj] for adj in adj_organs])
+            dists = np.linalg.norm(adj_centers - cc_center, axis=1)
+            dist_self = np.linalg.norm(cc_center - organ_center)
+            min_dist_idx = np.argmin(dists)
+
+            if dists[min_dist_idx] < dist_self:
+                adj_organ = adj_organs[min_dist_idx]
+
+                if adj_organ not in segmentation_dict:
+                    segmentation_dict[adj_organ] = np.zeros_like(mask)
+                segmentation_dict[adj_organ][cc_mask] = 1
+                print(f"[INFO] Reassigned component from {organ} → {adj_organ}")
+            else:
+                updated_mask[cc_mask] = 1
+
+        segmentation_dict[organ] = updated_mask
+    return segmentation_dict
+
+
+            # dist_self = np.linalg.norm(cc_center - organ_center)
+            # reassigned = False
+    #         for adj_organ in organ_adjacency_map[organ]:
+    #             adj_center = organ_centers.get(adj_organ)
+    #             if adj_center is None:
+    #                 continue
+
+    #             dist_adj = np.linalg.norm(cc_center - adj_center)
+    #             if dist_adj < dist_self:
+    #                 # Reassign this component to the adjacent organ
+    #                 if adj_organ not in segmentation_dict:
+    #                     segmentation_dict[adj_organ] = np.zeros_like(mask)
+
+    #                 segmentation_dict[adj_organ][cc_mask] = 1
+    #                 print(f"[INFO] Reassigned component from {organ} → {adj_organ}")
+    #                 reassigned = True
+    #                 break
+
+    #         if not reassigned:
+    #             updated_mask[cc_mask] = 1
+
+    #     # Update
+    #     segmentation_dict[organ] = updated_mask
+
+    # return segmentation_dict
+
+    
+
+
+def post_processing_adrenal_gland(segmentation_dict: dict, axis_map: dict, calibration_standards_mask: np.ndarray) -> dict:
+    """
+    Post-processing for adrenal glands: assigns correct left/right using liver position.
+    """
+    adrenal_left = segmentation_dict.get("adrenal_gland_left", None)
+    adrenal_right = segmentation_dict.get("adrenal_gland_right", None)
+
+    if adrenal_left is None or adrenal_right is None:
+        print("[WARNING] Missing adrenal gland masks in segmentation_dict.")
+        return segmentation_dict
+
+    adrenal_mask = ((adrenal_left > 0) | (adrenal_right > 0)).astype(np.uint8)
+    adrenal_mask = remove_small_components(adrenal_mask, np.sum(adrenal_mask) / 10)
+
+    # Split left/right
+    right_mask, left_mask = split_right_left(adrenal_mask, AXIS=axis_map['x'])
+    
+    # right and left
+    right_mask, left_mask = reassign_left_right_based_on_liver(
+        right_mask,
+        left_mask,
+        calibration_standards_mask
+    )
+
+    segmentation_dict['adrenal_gland_left'] = left_mask
+    segmentation_dict['adrenal_gland_right'] = right_mask
+
+    return segmentation_dict
