@@ -71,3 +71,5 @@ organ_adjacency_map = {
     'postcava': ['aorta'],
     'colon': ['intestine'],
 }
+
+affine_reference_file_name = 'segmentations/liver.nii.gz'

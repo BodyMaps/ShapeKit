@@ -21,41 +21,70 @@ from nibabel.orientations import aff2axcodes
 # utils.py - Organ Segmentation Post-Processing Utilities
 #
 # Description:
-# This module provides utility functions for refining 3D medical segmentation masks.
-# The functions are designed to clean, split, balance, and export organ-specific masks
-# in both combined and individual formats using standard NIfTI files.
+# This module provides utility functions for cleaning, analyzing, splitting, smoothing,
+# and exporting 3D medical organ segmentation masks (typically in NIfTI format).
+# Designed to facilitate robust downstream processing of multi-organ segmentations,
+# these utilities address common issues such as label confusion, anatomical symmetry,
+# component fragmentation, and mask hollowing.
 #
 # Core Functionalities:
 # ----------------------------------------------------------------------------------
-# • split_organ(mask, axis):
-#     - Split a 3D binary mask into left/right or top/bottom parts.
-#     - Finds the sparsest slice within the central 1/3 of the bounding range
-#       along the given axis and uses it as the split point.
+# • compute_center(mask):
+#     - Computes the center of mass of a 3D binary mask.
 #
-# • smooth_split_by_axis(left_mask, right_mask, axis, min_voxels=100):
-#     - Reassign mis-split components between two masks based on their
-#       median position along the axis relative to the global split line.
+# • component_location_info(labels_out, component_labels):
+#     - Computes centroid coordinates and distances for each connected component.
 #
-# • fill_from_inside(mask):
-#     - Fills a hollow or surface-only 3D organ mask by flood-filling
-#       from its center to produce a solid volume.
+# • filter_cc(organ_mask):
+#     - Removes connected components far from the main centroid (artifact suppression).
+#
+# • fill_holes(mask), fill_holes_3d(mask):
+#     - Fill 2D/3D holes within binary masks to ensure solid volumes.
 #
 # • fill_convex_hull_2p5D(mask):
-#     - Fills each 2D slice of a 3D binary mask with its convex hull
-#       for smoother, non-concave shapes.
+#     - Fills each 2D slice with its convex hull, regularizing mask shapes slice-wise.
 #
-# • suppress_non_largest_components_binary(mask, keep_top=1):
-#     - Keeps only the largest N connected components in a binary mask.
+# • suppress_non_largest_components_binary(mask, keep_top):
+#     - Keeps only the largest N connected components in a mask.
 #
 # • remove_small_components(mask, threshold):
-#     - Removes connected components smaller than the given voxel threshold.
+#     - Removes connected components smaller than a voxel count threshold.
+#
+# • split_organ(mask, axis):
+#     - Splits a symmetric organ mask (e.g., lung) into left/right or top/bottom.
+#
+# • split_right_left(mask, AXIS):
+#     - Separates organ masks into left/right using coordinate medians and connectivity.
+#
+# • balance_protrusion_between_masks(mask_A, mask_B, axis, min_cc_voxel):
+#     - Resolves overlaps and label confusion between adjacent/touching masks.
+#
+# • smooth_binary_image(binary_image, iterations):
+#     - Morphological smoothing of binary images via dilation/erosion.
+#
+# • smooth_segmentation(segmentation):
+#     - Smooths each label in a multi-label segmentation independently.
+#
+# • soft_dice(mask1, mask2, sigma):
+#     - Computes a soft Dice similarity with optional Gaussian smoothing.
 #
 # • reinsert_organ(organ_mask, organ_index, segmentation):
-#     - Overwrites an organ region in the segmentation volume with a new mask.
+#     - Reinserts an updated organ mask into a multi-organ segmentation volume.
 #
-# • balance_protrusion_between_masks(mask_A, mask_B, axis, min_cc_voxel=1000):
-#     - Resolves label confusion between two touching masks by moving
-#       components that cross the median density split axis.
+# • reassign_left_right_based_on_liver(right_mask, left_mask, liver_mask):
+#     - Assigns right/left mask identities based on anatomical liver proximity.
+#
+# • get_axis_map(img):
+#     - Maps physical axes (e.g., L/R, A/P, S/I) to array axes from a NIfTI image.
+#
+# • bbox_distance(mask1, mask2):
+#     - Calculates minimum bounding box separation between two masks.
+#
+# • read_all_segmentations(folder_path, data_type):
+#     - Loads all 3D segmentation masks from a folder into a dictionary.
+#
+# • save_and_combine_segmentations(processed_segmentation_dict, class_map, ...):
+#     - Saves individual organ segmentations and combines them into a single label map.
 #
 ####################################################################################
 
@@ -522,9 +551,6 @@ def read_all_segmentations(folder_path, data_type=np.int16) -> dict:
 
 
 
-import os
-import numpy as np
-import nibabel as nib
 
 def save_and_combine_segmentations(processed_segmentation_dict: dict,
                                    class_map: dict,

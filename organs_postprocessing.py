@@ -134,7 +134,17 @@ def post_processing_spleen(segmentation_dict):
 
 def check_z_reverse(segmentation_dict, AXIS_Z, check_organ_1='kidney_left', check_organ_2='lung_left')->bool:
     """
-    Outdated Warning
+    Check if the Z-axis order of organs is reversed in the segmentation.
+
+    This function compares the mean Z positions of two organs (default: left kidney and left lung)
+    in a segmentation mask to determine if the order along the Z axis is anatomically reversed.
+    - In normal CT orientation, the lung (or stomach) should have a lower mean Z than the kidney.
+    - If the lung (or stomach) appears "below" the kidney (lung_z > kidney_z), this suggests a Z-axis flip.
+
+    Notes:
+        - If the lung mask is missing or empty, the function tries the stomach mask as a backup.
+        - If the kidney mask is missing or empty, the function skips the check and returns False.
+        - Issues a warning if either organ is missing or empty.
     """
     kidney_mask = segmentation_dict.get(check_organ_1)
     lung_mask = segmentation_dict.get(check_organ_2)
@@ -159,9 +169,9 @@ def check_z_reverse(segmentation_dict, AXIS_Z, check_organ_1='kidney_left', chec
 
 def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, reference='kidney_left'):
     """
-    Check some extreme oragn locations
+    Check some extreme oragn locations for anatomical boundaries.
 
-    suitable for femur, bladder and prostate. set kidney as reference.
+        * suitable for femur, bladder and prostate. set kidney as reference organ.
     
     """
 
@@ -283,7 +293,7 @@ def post_processing_kidney(segmentation_dict: dict, axis_map: dict, calibration_
 def post_processing_lung_v2(segmentation_dict, axis_map, 
                               target_label: str = 'lung_left', fallback_label: str = 'colon', min_size: int = 50):
     """
-    @ dongli he 
+    @ Dongli He 
 
     Post-processing for mislabelled lung components based on anatomical constraints.
 
@@ -529,35 +539,7 @@ def reassign_FalsePositives(segmentation_dict:dict, organ_adjacency_map:dict, ch
         segmentation_dict[organ] = updated_mask
     return segmentation_dict
 
-
-            # dist_self = np.linalg.norm(cc_center - organ_center)
-            # reassigned = False
-    #         for adj_organ in organ_adjacency_map[organ]:
-    #             adj_center = organ_centers.get(adj_organ)
-    #             if adj_center is None:
-    #                 continue
-
-    #             dist_adj = np.linalg.norm(cc_center - adj_center)
-    #             if dist_adj < dist_self:
-    #                 # Reassign this component to the adjacent organ
-    #                 if adj_organ not in segmentation_dict:
-    #                     segmentation_dict[adj_organ] = np.zeros_like(mask)
-
-    #                 segmentation_dict[adj_organ][cc_mask] = 1
-    #                 print(f"[INFO] Reassigned component from {organ} → {adj_organ}")
-    #                 reassigned = True
-    #                 break
-
-    #         if not reassigned:
-    #             updated_mask[cc_mask] = 1
-
-    #     # Update
-    #     segmentation_dict[organ] = updated_mask
-
-    # return segmentation_dict
-
     
-
 
 def post_processing_adrenal_gland(segmentation_dict: dict, axis_map: dict, calibration_standards_mask: np.ndarray) -> dict:
     """

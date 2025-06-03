@@ -2,8 +2,10 @@ import argparse
 from multiprocessing import cpu_count
 from organs_postprocessing import *
 from tqdm import tqdm
+from config import affine_reference_file_name
 
-reference_file_name = 'segmentations/liver.nii.gz' # affine info
+
+reference_file_name =  affine_reference_file_name # affine info
 data_type = np.int16
 ##############################################################
 
