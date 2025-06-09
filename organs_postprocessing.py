@@ -290,7 +290,7 @@ def post_processing_kidney(segmentation_dict: dict, axis_map: dict, calibration_
 
 # the biggest problem is here, how to deal with the extreme-shape problem with lung?
 
-def post_processing_lung_v2(segmentation_dict, axis_map, 
+def dongli_lung_constraints(segmentation_dict, axis_map, 
                               target_label: str = 'lung_left', fallback_label: str = 'colon', min_size: int = 50):
     """
     @ Dongli He 
@@ -372,8 +372,8 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
     """
     
     # for the case lung is not in the abdominal reference area
-    segmentation_dict = post_processing_lung_v2(segmentation_dict, axis_map, 'lung_left')
-    segmentation_dict = post_processing_lung_v2(segmentation_dict, axis_map, 'lung_right')
+    segmentation_dict = dongli_lung_constraints(segmentation_dict, axis_map, 'lung_left')
+    segmentation_dict = dongli_lung_constraints(segmentation_dict, axis_map, 'lung_right')
 
     lung_left = segmentation_dict.get("lung_left", None)
     lung_right = segmentation_dict.get("lung_right", None)
@@ -469,11 +469,21 @@ def reassign_FalsePositives(segmentation_dict:dict, organ_adjacency_map:dict, ch
     """
     Reassign false positives between anatomically adjacent organs.
 
-        For each organ:
+    For each organ:
         - Keep top 5 connected components
         - For each component, compare its center to its own organ center
             vs centers of adjacent organs
         - If it's closer to an adjacent organ → reassign the component
+    
+    Args:
+        segmentation_dict (dict): A dictionary mapping organ names (str) to binary masks (np.ndarray).
+        organ_adjacency_map (dict): A dictionary defining spatial adjacency between organs. 
+                                    Each key is an organ, and the value is a list of its adjacent organs.
+        check_size_threshold (int, optional): Minimum component size to consider for reassignment. 
+                                              
+
+    Returns:
+        dict: Updated segmentation dictionary.
     """
 
 

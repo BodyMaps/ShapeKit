@@ -184,6 +184,12 @@ def fill_convex_hull_2p5D(mask_3d):
 def suppress_non_largest_components_binary(mask, keep_top=2):
     """
     Suppress all but the top-N largest connected components in a binary mask.
+    Args:
+        mask (np.ndarray): Binary mask where 1 indicates foreground.
+        keep_top (int): Number of largest components to keep. Default is 2.
+
+    Returns:
+        np.ndarray: Cleaned binary mask.
     """
     if not np.any(mask):
         return mask  
@@ -256,7 +262,14 @@ def reinsert_organ(organ_mask, organ_index, segmentation):
 
 def remove_small_components(mask, threshold):
     """
-    Remove small compoents based on a given volumn threshold.
+    Removes small connected components from a binary mask.
+
+    Args:
+        mask (np.array): Binary 3D array.
+        threshold (int): Minimum number of voxels a component must have to be kept.
+
+    Returns:
+        np.array: A cleaned binary mask.
     """
     labeled_mask = label(mask)
     regions = regionprops(labeled_mask)
@@ -268,8 +281,20 @@ def remove_small_components(mask, threshold):
 
 def split_right_left(mask, AXIS=0):
     """
-    Help to split the organs with symmetry
+    Splits a symmetric organ mask into right and left components along a specified axis.
+
+    Each connected component in the mask is assigned to either the left or right side based 
+    on the mean coordinate of its voxels along the specified axis.
+
+    Args:
+        mask (np.ndarray): Binary 3D mask containing the merged organ(s).
+        AXIS (int): Axis along which to perform the split. Default is 0 (left-right).
+
+    Returns:
+        right_mask (np.ndarray): Binary mask containing right-side components.
+        left_mask (np.ndarray): Binary mask containing left-side components.
     """
+
 
     coords = np.argwhere(mask == 1)
     x_mid = np.median(coords[:, AXIS])  
@@ -464,6 +489,11 @@ def reassign_left_right_based_on_liver(right_mask, left_mask, liver_mask):
     """
     Reassign left and right masks based on proximity to the liver.
     Liver is assumed to always be on the right side anatomically.
+
+    Args:
+        right_mask (np.ndarray): Binary mask for the presumed right-side organ.
+        left_mask (np.ndarray): Binary mask for the presumed left-side organ.
+        liver_mask (np.ndarray): Binary mask for the liver (used as spatial reference).
 
     Returns:
         corrected_right_mask, corrected_left_mask : np.ndarray
