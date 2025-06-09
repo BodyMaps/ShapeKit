@@ -12,6 +12,8 @@
 
 **ShapeKit** is a toolkit designed for medical segmentation research. 
 
+This repository provides a parallelized Python pipeline for anatomical-aware post-processing of multi-organ medical image segmentations. The workflow includes combining, refining, and anatomically calibrating predicted segmentations to produce robust and consistent output suitable for downstream analysis.
+
 > [!IMPORTANT]
 > But hey, don't hit that star just yet—the code here is ugly. We're working hard to clean it up and make it something you'll actually enjoy using. Stay tuned!
 
@@ -51,6 +53,126 @@ while read requirement; do
 done < requirements.txt
 ```
 
+# Run ShapeKit
+```bash
+export inputs="path/to/your/inputfolder"
+export outputs="path/to/your/outputfolder"
+
+python -W ignore main.py --input_folder inputs --output_folder outpus --cpu_count 16
+```
+> [!IMPORTANT] Before running any commands, please ensure that `config.py` is properly configured, with special attention to the anatomical mapping dictionary `class_map`. This mapping is critical for correct organ identification and post-processing.
+
+# Data Structure
+The input and output files will be formated as:
+```
+INPUT or OUTPUT
+└── case_001
+    ├── combined_labels.nii.gz
+    └── segmentations
+            ├── liver.nii.gz
+            ...
+            └── veins.nii.gz
+```
+> [!IMPORTANT] If you set outputs and inputs the same, the system will automatically overwrite the orginal folder.
+
+# Key Post-Processing Functions
+## Remove Small Components
+Removes small, disconnected regions from a binary segmentation mask, helping to eliminate noise and improve anatomical plausibility.
+
+**Signature:**  
+`remove_small_components(mask: np.ndarray, threshold: int)`
+
+**Parameters:**
+- `mask` (`np.ndarray`): Binary 3D mask.
+- `threshold` (`int`): Minimum size (in voxels) for a component to be kept.
+
+**Returns:**
+- `np.ndarray`: Cleaned binary mask.
+
+**Example**
+```python
+cleaned_mask = remove_small_components(mask, threshold=100)
+```
+
+## reassign_FalsePositives
+Reassigns false positive regions between anatomically adjacent organs, based on spatial proximity. Improves segmentation specificity by correcting mislabeling.
+
+
+**Signature:** 
+
+`reassign_FalsePositives(segmentation_dict: dict, organ_adjacency_map: dict, check_size_threshold: int = 500):`
+
+**Parameters:**
+- `segmentation_dict` (`dict`): Mapping of organ names to binary masks.
+- `organ_adjacency_map` (`dict`): Defines adjacency between organs.
+- `check_size_threshold` (`int`, optional): Minimum component size for reassignment (default: 500).
+
+**Returns:**
+- `dict`: Updated segmentation dictionary.
+
+**Example**
+```python
+segmentation_dict = reassign_FalsePositives(segmentation_dict, organ_adjacency_map)
+```
+
+## suppress_non_largest_components_binary
+
+Keeps only the N largest connected components in a binary mask, removing smaller fragments.
+
+**Signature:**  
+`suppress_non_largest_components_binary(mask: np.ndarray, keep_top: int = 2):`
+
+**Parameters:**
+- `mask` (`np.ndarray`): Binary 3D mask.
+- `keep_top` (`int`): Number of largest components to retain (default: 2).
+
+**Returns:**
+- `np.ndarray`: Cleaned binary mask.
+
+**Example**
+```python
+dominant_mask = suppress_non_largest_components_binary(mask, keep_top=2)
+```
+
+## split_right_left
+
+Splits a symmetric organ mask into right and left components along a specified axis.
+
+**Signature:**  
+`split_right_left(mask: np.ndarray, AXIS: int = 0):`
+
+**Parameters:**
+- `mask` (`np.ndarray`): Binary 3D mask (e.g., for lungs or kidneys).
+- `AXIS` (`int`): Axis along which to perform the split (default: 0).
+
+**Returns:**
+- `Tuple[np.ndarray, np.ndarray]`: (`right_mask`, `left_mask`)
+
+**Example**
+```python
+right_mask, left_mask = split_right_left(organ_mask, AXIS=0)
+```
+
+## reassign_left_right_based_on_liver
+
+Corrects left and right assignments for organs using the liver as a spatial reference (assumed right-side).
+
+**Signature:**  
+`reassign_left_right_based_on_liver(right_mask: np.ndarray, left_mask: np.ndarray, liver_mask: np.ndarray):`
+
+**Parameters:**
+- `right_mask` (`np.ndarray`): Presumed right-side organ mask.
+- `left_mask` (`np.ndarray`): Presumed left-side organ mask.
+- `liver_mask` (`np.ndarray`): Liver mask (reference for spatial correction).
+
+**Returns:**
+- `Tuple[np.ndarray, np.ndarray]`: (`corrected_right_mask`, `corrected_left_mask`)
+
+**Example**
+```python
+corrected_right, corrected_left = reassign_left_right_based_on_liver(
+    right_mask, left_mask, liver_mask)
+```
 
 
 # Related Articles
