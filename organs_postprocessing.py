@@ -318,7 +318,8 @@ def dongli_lung_constraints(segmentation_dict, axis_map,
     reference_mask = (
         segmentation_dict.get('liver', 0) |
         segmentation_dict.get('spleen', 0) |
-        segmentation_dict.get('stomach', 0)
+        segmentation_dict.get('stomach', 0)  |
+        segmentation_dict.get('colon', 0)
     ).astype(np.uint8)
 
     if not np.any(reference_mask):
@@ -340,7 +341,7 @@ def dongli_lung_constraints(segmentation_dict, axis_map,
         
         coords = np.argwhere(cc_map == cc_id)
 
-        z_max = np.max(coords[:, Z])
+        z_max = np.mean(coords[:, Z]) # use average position instead
 
         if (reversed_z and z_max < z_lower_bound) or (not reversed_z and z_max > z_lower_bound):
             fallback_mask[tuple(coords.T)] = 1
