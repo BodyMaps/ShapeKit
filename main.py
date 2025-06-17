@@ -49,7 +49,6 @@ def process_organs(segmentation_dict:dict, reference_img, combined_seg:np.array)
     calibration_standards_mask = segmentation_dict.get('liver')
     
     segmentation_dict = post_processing_lung(segmentation_dict, axis_map, calibration_standards_mask)
-    segmentation_dict = post_processing_colon(segmentation_dict) 
     segmentation_dict = post_processing_kidney(segmentation_dict, axis_map, calibration_standards_mask)
     segmentation_dict = post_processing_femur(segmentation_dict, axis_map, calibration_standards_mask)
     segmentation_dict = post_processing_adrenal_gland(segmentation_dict, axis_map, calibration_standards_mask)

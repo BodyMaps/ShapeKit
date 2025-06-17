@@ -373,8 +373,8 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
     """
     
     # for the case lung is not in the abdominal reference area
-    segmentation_dict = dongli_lung_constraints(segmentation_dict, axis_map, 'lung_left')
-    segmentation_dict = dongli_lung_constraints(segmentation_dict, axis_map, 'lung_right')
+    # segmentation_dict = dongli_lung_constraints(segmentation_dict, axis_map, 'lung_left')
+    # segmentation_dict = dongli_lung_constraints(segmentation_dict, axis_map, 'lung_right')
 
     lung_left = segmentation_dict.get("lung_left", None)
     lung_right = segmentation_dict.get("lung_right", None)
