@@ -61,11 +61,10 @@ class_map = {
 
 # this is the mapping dict for checking false positives among consective organs
 organ_adjacency_map = {
-    'liver': ['kidney_right', 'pancreas', 'lung_right', 'lung_left'],
+    'liver': ['kidney_right', 'pancreas'],
     'pancreas': ['liver', 'stomach'],
     'spleen':['liver'],
-    'kidney_right': ['liver'],
-    'kidney_left': ['spleen'],
+    'kidney_left': ['liver'],
     'stomach': ['pancreas'],
     'aorta': ['postcava'], 
     'postcava': ['aorta'],

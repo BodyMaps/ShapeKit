@@ -44,6 +44,7 @@ def process_organs(segmentation_dict:dict, reference_img, combined_seg:np.array)
     segmentation_dict = post_processing_pancreas(segmentation_dict)
     segmentation_dict = post_processing_colon(segmentation_dict)
     segmentation_dict = post_processing_spleen(segmentation_dict)
+    segmentation_dict = post_processing_duodenum(segmentation_dict)
     
     # for calibration to define which one shall be on the right side
     calibration_standards_mask = segmentation_dict.get('liver')
