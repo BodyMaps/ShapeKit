@@ -19,8 +19,9 @@ def post_processing_liver(segmentation_dict):
     """
     liver_mask = segmentation_dict['liver'].copy()
     
-    # keep only the largest components
-    cleaned_liver_mask =  suppress_non_largest_components_binary(liver_mask, keep_top=3)
+    # keep only the main components
+    cleaned_liver_mask = suppress_non_largest_components_binary(liver_mask, keep_top=3)
+    cleaned_liver_mask = remove_small_components(liver_mask, np.sum(cleaned_liver_mask)/10)
     
     # Update
     segmentation_dict['liver'] = cleaned_liver_mask
@@ -114,7 +115,14 @@ def post_processing_stomach(segmentation_dict):
     return segmentation_dict
 
 
-    
+def post_processing_duodenum(segmentation_dict):
+    """ New """
+    duodenum_mask = segmentation_dict.get('duodenum')
+    cleaned_duodenum_mask = remove_small_components(duodenum_mask, np.sum(duodenum_mask)/10)
+    segmentation_dict['duodenum'] = cleaned_duodenum_mask
+
+    return segmentation_dict
+
 def post_processing_spleen(segmentation_dict):
     """
     Post-prcessing for spleen.
@@ -175,11 +183,22 @@ def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, refe
     
     """
 
-    kidney_mask = segmentation_dict.get(reference)
+    reference_mask = segmentation_dict.get(reference)
     reversed_z = check_z_reverse(segmentation_dict, AXIS_Z)
     print(f"[INFO] Checking {organ_name}..., Z-axis reversed: {reversed_z}")
 
-    kidney_z_min = np.min(np.argwhere(kidney_mask)[:, AXIS_Z])
+    try:
+        z_limit = np.mean(np.argwhere(reference_mask)[:, AXIS_Z])
+    except:
+        print(f"[Info] Organ location check failed with {reference}, now try liver")
+        reference_mask = segmentation_dict.get('liver')
+
+        try:
+            z_limit = np.mean(np.argwhere(reference_mask)[:, AXIS_Z])
+        except:
+            print(f"[Info] Still failed, skiping ...")
+            return organ_mask
+        
 
     # Prepare to filter femur voxels
     corrected_organ_mask = organ_mask.copy()
@@ -187,7 +206,7 @@ def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, refe
 
     for coord in organ_coords:
         z = coord[AXIS_Z]
-        if (not reversed_z and z < kidney_z_min) or (reversed_z and z > kidney_z_min):
+        if (not reversed_z and z < z_limit) or (reversed_z and z > z_limit):
             corrected_organ_mask[tuple(coord)] = 0
 
     removed_voxels = np.sum(organ_mask) - np.sum(corrected_organ_mask)
