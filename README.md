@@ -58,9 +58,10 @@ done < requirements.txt
 export inputs="path/to/your/inputfolder"
 export outputs="path/to/your/outputfolder"
 
-python -W ignore main.py --input_folder inputs --output_folder outpus --cpu_count 16
+python -W ignore main.py --input_folder inputs --output_folder outputs --cpu_count 16
 ```
-> [!IMPORTANT] Before running any commands, please ensure that `config.py` is properly configured, with special attention to the anatomical mapping dictionary `class_map`. This mapping is critical for correct organ identification and post-processing.
+> [!IMPORTANT]
+> Before running any commands, please ensure that `config.py` is properly configured, with special attention to the anatomical mapping dictionary `class_map`. This mapping is critical for correct organ identification and post-processing.
 
 # Data Structure
 The input and output files will be formated as:
@@ -73,7 +74,8 @@ INPUT or OUTPUT
             ...
             └── veins.nii.gz
 ```
-> [!IMPORTANT] If you set outputs and inputs the same, the system will automatically overwrite the orginal folder.
+> [!IMPORTANT] 
+>  If you set outputs and inputs the same, the system will automatically overwrite the orginal folder.
 
 # Key Post-Processing Functions
 ## Remove Small Components
