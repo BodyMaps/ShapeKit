@@ -36,7 +36,7 @@ def process_organs(segmentation_dict:dict, reference_img, combined_seg:np.array)
     axis_map = get_axis_map(reference_img)
 
     # deal with fp
-    segmentation_dict = reassign_FalsePositives(segmentation_dict, organ_adjacency_map)
+    segmentation_dict = reassign_false_positives(segmentation_dict, organ_adjacency_map)
 
     # larger organs piror to smaller ones
     segmentation_dict = post_processing_stomach(segmentation_dict)
@@ -45,7 +45,7 @@ def process_organs(segmentation_dict:dict, reference_img, combined_seg:np.array)
     segmentation_dict = post_processing_colon(segmentation_dict)
     segmentation_dict = post_processing_spleen(segmentation_dict)
     segmentation_dict = post_processing_duodenum(segmentation_dict)
-    
+
     # for calibration to define which one shall be on the right side
     calibration_standards_mask = segmentation_dict.get('liver')
     

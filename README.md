@@ -78,7 +78,7 @@ INPUT or OUTPUT
 >  If you set outputs and inputs the same, the system will automatically overwrite the orginal folder.
 
 # Key Post-Processing Functions
-## Remove Small Components
+## remove_small_components
 Removes small, disconnected regions from a binary segmentation mask, helping to eliminate noise and improve anatomical plausibility.
 
 **Signature:**  
@@ -96,7 +96,7 @@ Removes small, disconnected regions from a binary segmentation mask, helping to 
 cleaned_mask = remove_small_components(mask, threshold=100)
 ```
 
-## reassign_FalsePositives
+## reassign_false_positives
 Reassigns false positive regions between anatomically adjacent organs, based on spatial proximity. Improves segmentation specificity by correcting mislabeling.
 
 

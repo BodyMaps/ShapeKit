@@ -485,7 +485,7 @@ def post_processing_aorta_postcava(segmentation_dict:dict):
 
 
 
-def reassign_FalsePositives(segmentation_dict:dict, organ_adjacency_map:dict, check_size_threshold = 500):
+def reassign_false_positives(segmentation_dict:dict, organ_adjacency_map:dict, check_size_threshold = 500):
     """
     Reassign false positives between anatomically adjacent organs.
 
