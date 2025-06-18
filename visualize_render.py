@@ -4,7 +4,7 @@ import pyvista as pv
 import numpy as np
 import os
 import matplotlib.colors as mcolors
-
+from utils import fill_holes
 
 
 
@@ -48,7 +48,7 @@ def get_labeled_group_mask(group_name, group_dict, location):
     organ_list = group_dict[group_name]
     
     # Load the first mask to get shape
-    first_path = os.path.join(location, 'combined_labels.nii.gz')
+    first_path = os.path.join(location, 'segmentations/liver.nii.gz')
     shape = nib.load(first_path).get_fdata().shape
     labeled_mask = np.zeros(shape, dtype=np.uint8)
 
@@ -57,6 +57,7 @@ def get_labeled_group_mask(group_name, group_dict, location):
             organ_path = os.path.join(location, 'segmentations', f'{organ}.nii.gz')
             nii_img = nib.load(organ_path)
             binary_mask = nii_img.get_fdata() > 0
+            binary_mask = fill_holes(binary_mask) # fill holes
             labeled_mask[binary_mask] = np.maximum(labeled_mask[binary_mask], idx)
 
             print(f"Loaded {organ}, \tassigned idx: {idx}, \tvolumn: {np.sum(binary_mask)}")
@@ -64,7 +65,6 @@ def get_labeled_group_mask(group_name, group_dict, location):
             print(f"Organ {organ} does not exist, pass ...")
 
     return labeled_mask
-
 
 def render_3d_fast(segmentation_mask, save_path='u', zoom_factor=1.5, AXIS_z=2, z_reverse_bool=False, cmap=None):
     """
@@ -76,17 +76,17 @@ def render_3d_fast(segmentation_mask, save_path='u', zoom_factor=1.5, AXIS_z=2, 
 
     # Create a volume from the numpy array
     grid = pv.wrap(segmentation_mask.astype(np.uint8))
-
+    
     # Plot with threshold to only show segmented voxels
-    plotter = pv.Plotter( window_size=(500, 500))
-    plotter.add_volume(grid, cmap=cmap, opacity="linear", shade=True, show_scalar_bar=False)
+    plotter = pv.Plotter(window_size=(500, 500))
+    plotter.add_volume(grid, cmap=cmap, opacity="foreground", shade=True, show_scalar_bar=False)
     plotter.view_vector((0, -1, 0))  # View along Z axis
     plotter.show_axes() 
     plotter.camera.zoom(zoom_factor) 
 
     light = pv.Light(
     light_type='headlight',  # Follows the camera
-    intensity=1.5,           # Stronger than default (1.0)
+    intensity=0.3,           
     color='white'
     )
     plotter.add_light(light)
@@ -102,13 +102,14 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--location", type=str, default="NV/BDMAP_00013500")
 parser.add_argument("--group", type=str, default=1)
-parser.add_argument("--save_name", type=str)
 
 args = parser.parse_args()
 location = args.location
-# organ = args.organ
+batch_name = location.split('/')[0]
+id_name = location.split('/')[1]
 group = args.group
-save_name = args.save_name
+save_name = f'{id_name}_{batch_name}'
+
 
 if __name__ == '__main__':
     
@@ -120,7 +121,7 @@ if __name__ == '__main__':
         segmentation_mask=mask, 
         zoom_factor=1.5,
         AXIS_z=2, 
-        save_path=f'{str(save_name)}_group{group.upper()}', 
-        z_reverse_bool=True,
+        save_path=f'figs/{str(save_name)}_group{group.upper()}', 
+        z_reverse_bool=False,
         cmap=cmap,
         )
