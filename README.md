@@ -14,9 +14,6 @@
 
 This repository provides a parallelized Python pipeline for anatomical-aware post-processing of multi-organ medical image segmentations. The workflow includes combining, refining, and anatomically calibrating predicted segmentations to produce robust and consistent output suitable for downstream analysis.
 
-> [!IMPORTANT]
-> But hey, don't hit that star just yet—the code here is ugly. We're working hard to clean it up and make it something you'll actually enjoy using. Stay tuned!
-
 # Installation
 
 Clone the repository and install dependencies:
