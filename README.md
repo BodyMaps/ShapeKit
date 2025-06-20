@@ -55,7 +55,7 @@ done < requirements.txt
 export inputs="path/to/your/inputfolder"
 export outputs="path/to/your/outputfolder"
 
-python -W ignore main.py --input_folder inputs --output_folder outputs --cpu_count 16
+python -W ignore main.py --input_folder $inputs --output_folder $outputs --cpu_count 16
 ```
 > [!IMPORTANT]
 > Before running any commands, please ensure that `config.py` is properly configured, with special attention to the anatomical mapping dictionary `class_map`. This mapping is critical for correct organ identification and post-processing.
