@@ -42,7 +42,7 @@ def process_organs(segmentation_dict:dict, reference_img, combined_seg:np.array)
     segmentation_dict = post_processing_stomach(segmentation_dict)
     segmentation_dict = post_processing_liver(segmentation_dict)
     segmentation_dict = post_processing_pancreas(segmentation_dict)
-    segmentation_dict = post_processing_colon(segmentation_dict)
+    segmentation_dict = post_processing_colon_intestine(segmentation_dict)
     segmentation_dict = post_processing_spleen(segmentation_dict)
     segmentation_dict = post_processing_duodenum(segmentation_dict)
 
@@ -95,7 +95,8 @@ def main(input_path, input_folder_name, output_path=None):
         processed_segmentation_dict=postprocessed_segmentation_dict,
         class_map=class_map,
         reference_img=img,
-        output_folder=save_folder_path
+        output_folder=save_folder_path,
+        if_save_combined=False
     )
 
 
