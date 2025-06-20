@@ -140,6 +140,7 @@ if __name__ == '__main__':
     input_folder = args.input_folder
     output_folder= args.output_folder
     sub_folders = [sf for sf in os.listdir(input_folder) if sf != '.DS_Store']
-    
+    sub_folders.sort(key=lambda x: int(x.split('_')[-1]))
+
     print(f"[INFO] Input files dir: {input_folder}\n[INFO] Output files dir: {output_folder}")
     run_in_parallel(sub_folders, input_folder, output_folder, max_workers=args.cpu_count)
