@@ -71,7 +71,7 @@ def post_processing_pancreas(segmentation_dict, dice_threshold=0.05):
     return segmentation_dict
 
 
-def post_processing_colon(segmentation_dict):
+def post_processing_colon_intestine(segmentation_dict):
     """
     Post-processing for colons. 
     
@@ -79,13 +79,16 @@ def post_processing_colon(segmentation_dict):
         * small artifacts
         * redundant structure
     """
-    colon_mask = segmentation_dict['colon'].copy()
+    colon_mask = segmentation_dict.get('colon')
+    intestine_mask = segmentation_dict.get('intestine')
 
     # remove small artifacts
     cleaned_colon_mask = remove_small_components(colon_mask, threshold=np.sum(colon_mask)/10)
+    cleaned_intestine_mask = remove_small_components(intestine_mask, threshold=np.sum(intestine_mask)/10)
 
     # re-insert
     segmentation_dict['colon'] = cleaned_colon_mask
+    segmentation_dict['intestine'] = cleaned_intestine_mask
     
     return segmentation_dict
 
@@ -333,12 +336,13 @@ def dongli_lung_constraints(segmentation_dict, axis_map,
     if lung_mask is None or not np.any(lung_mask):
         return segmentation_dict
 
-    # Combine reference organs for lower Z-bound check
+    # Combine reference organs for Z-bound check
     reference_mask = (
-        segmentation_dict.get('liver', 0) |
+        segmentation_dict.get('kidney_left', 0) |
+        segmentation_dict.get('kidney_right', 0)  |
         segmentation_dict.get('spleen', 0) |
-        segmentation_dict.get('stomach', 0)  |
-        segmentation_dict.get('colon', 0)
+        segmentation_dict.get('colon', 0) |
+        segmentation_dict.get('intestine', 0)  
     ).astype(np.uint8)
 
     if not np.any(reference_mask):
@@ -485,80 +489,57 @@ def post_processing_aorta_postcava(segmentation_dict:dict):
 
 
 
-def reassign_false_positives(segmentation_dict:dict, organ_adjacency_map:dict, check_size_threshold = 500):
-    """
-    Reassign false positives between anatomically adjacent organs.
-
-    For each organ:
-        - Keep top 5 connected components
-        - For each component, compare its center to its own organ center
-            vs centers of adjacent organs
-        - If it's closer to an adjacent organ → reassign the component
-    
-    Args:
-        segmentation_dict (dict): A dictionary mapping organ names (str) to binary masks (np.ndarray).
-        organ_adjacency_map (dict): A dictionary defining spatial adjacency between organs. 
-                                    Each key is an organ, and the value is a list of its adjacent organs.
-        check_size_threshold (int, optional): Minimum component size to consider for reassignment. 
-                                              
-
-    Returns:
-        dict: Updated segmentation dictionary.
-    """
-
-
+from scipy.spatial import KDTree
+def reassign_false_positives(segmentation_dict: dict, organ_adjacency_map: dict, check_size_threshold=2000):
     organ_centers = {}
     organ_masks = {}
 
-    # Clean and cache centers
+    # Cache organ centers
     for organ in organ_adjacency_map:
         mask = segmentation_dict.get(organ, None)
         if mask is None or np.sum(mask) == 0:
             continue
-        
-        # mask = suppress_non_largest_components_binary(mask, keep_top=5)
         center = compute_center(mask)
-
         if center is not None:
             organ_masks[organ] = mask
-            organ_centers[organ] = center
+            organ_centers[organ] = np.array(center)
 
-    # Process each organ's components
+    # Build KDTree for all centers (used on a per-organ basis)
     for organ, mask in organ_masks.items():
         organ_center = organ_centers[organ]
-        if organ_center is None:
-            continue
-
         cc_map = cc3d.connected_components(mask, connectivity=6)
         updated_mask = np.zeros_like(mask)
+
+        check_size_threshold = np.sum(mask)/10
+        # Prepare KDTree for adjacent organs
+        adj_organs = [adj for adj in organ_adjacency_map[organ] if adj in organ_centers]
+        if adj_organs:
+            adj_centers = np.array([organ_centers[adj] for adj in adj_organs])
+            adj_tree = KDTree(adj_centers)
+        else:
+            adj_tree = None
 
         for cc_id in np.unique(cc_map):
             if cc_id == 0:
                 continue
-
             cc_mask = (cc_map == cc_id)
-            # skip the smaller ones
             if np.sum(cc_mask) < check_size_threshold:
                 continue
-            cc_center = compute_center(cc_mask)
+            
+            cc_center = np.array(compute_center(cc_mask))
             if cc_center is None:
                 continue
 
+            # Compare distances using KDTree
+            dist_self = np.linalg.norm(cc_center - organ_center)
 
-            # Vectorized distance computation to all adjacent organ centers
-            adj_organs = [adj for adj in organ_adjacency_map[organ] if adj in organ_centers]
-            if not adj_organs:
+            if adj_tree is None:
                 updated_mask[cc_mask] = 1
                 continue
 
-            adj_centers = np.array([organ_centers[adj] for adj in adj_organs])
-            dists = np.linalg.norm(adj_centers - cc_center, axis=1)
-            dist_self = np.linalg.norm(cc_center - organ_center)
-            min_dist_idx = np.argmin(dists)
-
-            if dists[min_dist_idx] < dist_self:
-                adj_organ = adj_organs[min_dist_idx]
-
+            dist_adj, idx_adj = adj_tree.query(cc_center)
+            if dist_adj < dist_self:
+                adj_organ = adj_organs[idx_adj]
                 if adj_organ not in segmentation_dict:
                     segmentation_dict[adj_organ] = np.zeros_like(mask)
                 segmentation_dict[adj_organ][cc_mask] = 1
@@ -567,6 +548,7 @@ def reassign_false_positives(segmentation_dict:dict, organ_adjacency_map:dict, c
                 updated_mask[cc_mask] = 1
 
         segmentation_dict[organ] = updated_mask
+
     return segmentation_dict
 
     

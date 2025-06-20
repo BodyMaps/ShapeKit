@@ -586,6 +586,7 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
                                    class_map: dict,
                                    reference_img: nib.Nifti1Image,
                                    output_folder: str,
+                                   if_save_combined: False,
                                    combined_filename: str = "combined_labels.nii.gz"):
     """
     Saves all organ masks in a folder and combines them into a single label volume.
@@ -618,8 +619,10 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
 
             # Combine masks: higher index can overwrite previous ones (if needed)
             combined[mask] = index
-
-    # Save combined label file (one write)
-    combined_img = nib.Nifti1Image(combined, affine=reference_img.affine, header=reference_img.header)
-    nib.save(combined_img, os.path.join(output_folder, combined_filename))
-    print(f"[INFO] Combined label saved to: {os.path.join(output_folder, combined_filename)}")
+    if if_save_combined:
+        # Save combined label file (one write)
+        combined_img = nib.Nifti1Image(combined, affine=reference_img.affine, header=reference_img.header)
+        nib.save(combined_img, os.path.join(output_folder, combined_filename))
+        
+    
+    print(f"[Info] Finished. Saved to {output_folder} ...")

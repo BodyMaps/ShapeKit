@@ -68,7 +68,7 @@ organ_adjacency_map = {
     'stomach': ['pancreas'],
     'aorta': ['postcava'], 
     'postcava': ['aorta'],
-    'colon': ['intestine'],
+    'colon': ['intestine', 'lung_left', 'lung_right'],
 }
 
 affine_reference_file_name = 'segmentations/liver.nii.gz'

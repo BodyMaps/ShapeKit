@@ -80,7 +80,7 @@ def render_3d_fast(segmentation_mask, save_path='u', zoom_factor=1.5, AXIS_z=2, 
     # Plot with threshold to only show segmented voxels
     plotter = pv.Plotter(window_size=(500, 500))
     plotter.add_volume(grid, cmap=cmap, opacity="foreground", shade=True, show_scalar_bar=False)
-    plotter.view_vector((0, -1, 0))  # View along Z axis
+    plotter.view_vector((0, 1, 0))  # View along Z axis
     plotter.show_axes() 
     plotter.camera.zoom(zoom_factor) 
 
@@ -94,7 +94,7 @@ def render_3d_fast(segmentation_mask, save_path='u', zoom_factor=1.5, AXIS_z=2, 
 
     save_path += '.svg'
     plotter.save_graphic(save_path)
-    plotter.show()
+    #plotter.show()
 
 
 
@@ -119,7 +119,7 @@ if __name__ == '__main__':
 
     render_3d_fast(
         segmentation_mask=mask, 
-        zoom_factor=1.5,
+        zoom_factor=1.2,
         AXIS_z=2, 
         save_path=f'figs/{str(save_name)}_group{group.upper()}', 
         z_reverse_bool=False,

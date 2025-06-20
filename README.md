@@ -65,7 +65,7 @@ The input and output files will be formated as:
 ```
 INPUT or OUTPUT
 └── case_001
-    ├── combined_labels.nii.gz
+    ├── combined_labels.nii.gz (optional)
     └── segmentations
             ├── liver.nii.gz
             ...
