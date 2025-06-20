@@ -84,12 +84,15 @@ def post_processing_colon_intestine(segmentation_dict):
 
     # remove small artifacts
     cleaned_colon_mask = remove_small_components(colon_mask, threshold=np.sum(colon_mask)/10)
-    cleaned_intestine_mask = remove_small_components(intestine_mask, threshold=np.sum(intestine_mask)/10)
 
     # re-insert
     segmentation_dict['colon'] = cleaned_colon_mask
-    segmentation_dict['intestine'] = cleaned_intestine_mask
     
+    try:
+        cleaned_intestine_mask = remove_small_components(intestine_mask, threshold=np.sum(intestine_mask)/10)
+        segmentation_dict['intestine'] = cleaned_intestine_mask
+    except:
+        print("[Info] Intestine does not exist, skipped ...")
     return segmentation_dict
 
 
@@ -396,8 +399,8 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
     """
     
     # for the case lung is not in the abdominal reference area
-    # segmentation_dict = dongli_lung_constraints(segmentation_dict, axis_map, 'lung_left')
-    # segmentation_dict = dongli_lung_constraints(segmentation_dict, axis_map, 'lung_right')
+    segmentation_dict = dongli_lung_constraints(segmentation_dict, axis_map, 'lung_left')
+    segmentation_dict = dongli_lung_constraints(segmentation_dict, axis_map, 'lung_right')
 
     lung_left = segmentation_dict.get("lung_left", None)
     lung_right = segmentation_dict.get("lung_right", None)
