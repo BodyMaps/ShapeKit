@@ -52,8 +52,8 @@ done < requirements.txt
 
 # Run ShapeKit
 ```bash
-export inputs="path/to/your/inputfolder"
-export outputs="path/to/your/outputfolder"
+export inputs="/mnt/bodymaps/mask_only/AbdomenAtlasPro/AbdomenAtlasPro"
+export outputs="/mnt/T9/temp_data_to_delete_very_soon/zzhou82/AAPro_jliu452_ccvl40"
 
 python -W ignore main.py --input_folder $inputs --output_folder $outputs --cpu_count 16
 ```
