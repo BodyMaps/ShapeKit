@@ -17,11 +17,10 @@ def post_processing_liver(segmentation_dict):
         * holes 
         * disconnected parts
     """
-    liver_mask = segmentation_dict['liver'].copy()
+    liver_mask = segmentation_dict.get('liver')
     
     # keep only the main components
     cleaned_liver_mask = suppress_non_largest_components_binary(liver_mask, keep_top=3)
-    cleaned_liver_mask = remove_small_components(liver_mask, np.sum(cleaned_liver_mask)/10)
     
     # Update
     segmentation_dict['liver'] = cleaned_liver_mask
@@ -41,7 +40,7 @@ def post_processing_pancreas(segmentation_dict, dice_threshold=0.05):
     in a heavy scale. Hence, need to compare with other organ parts (tail, body, head).
     """
 
-    pancreas_mask = segmentation_dict['pancreas'].copy()
+    pancreas_mask = segmentation_dict.get('pancreas')
     try:    # is pancreas sub-parts exist, check with 
 
         head_mask     = segmentation_dict['pancreas_head']
@@ -106,28 +105,20 @@ def post_processing_stomach(segmentation_dict):
         
     """
     stomach_mask = segmentation_dict['stomach'].copy()
-
-    # detect weather it is filled with food
-    stomach_mask_filled = fill_holes_3d(stomach_mask)
-
-    if np.sum(stomach_mask_filled) < 2 * np.sum(stomach_mask):
-        # needs to fill
-        stomach_mask = stomach_mask_filled
-    
-    cleaned_stomach_mask = remove_small_components(mask=stomach_mask, threshold=np.sum(stomach_mask) / 10)
-
+    cleaned_stomach_mask = remove_small_components(stomach_mask, threshold=np.sum(stomach_mask) / 10)
     segmentation_dict['stomach'] = cleaned_stomach_mask
 
     return segmentation_dict
 
 
 def post_processing_duodenum(segmentation_dict):
-    """ New """
+    """"""
     duodenum_mask = segmentation_dict.get('duodenum')
     cleaned_duodenum_mask = remove_small_components(duodenum_mask, np.sum(duodenum_mask)/10)
     segmentation_dict['duodenum'] = cleaned_duodenum_mask
 
     return segmentation_dict
+
 
 def post_processing_spleen(segmentation_dict):
     """
@@ -491,29 +482,30 @@ def post_processing_aorta_postcava(segmentation_dict:dict):
     return segmentation_dict
 
 
-
-from scipy.spatial import KDTree
 def reassign_false_positives(segmentation_dict: dict, organ_adjacency_map: dict, check_size_threshold=2000):
     organ_centers = {}
     organ_masks = {}
 
-    # Cache organ centers
-    for organ in organ_adjacency_map:
-        mask = segmentation_dict.get(organ, None)
-        if mask is None or np.sum(mask) == 0:
+    # Step 1: Cache organ centers
+    for organ, mask in segmentation_dict.items():
+        if organ not in organ_adjacency_map:
+            continue
+        if mask is None or mask.sum() == 0:
             continue
         center = compute_center(mask)
         if center is not None:
             organ_masks[organ] = mask
             organ_centers[organ] = np.array(center)
 
-    # Build KDTree for all centers (used on a per-organ basis)
+    # Step 2: Iterate over each organ
     for organ, mask in organ_masks.items():
         organ_center = organ_centers[organ]
         cc_map = cc3d.connected_components(mask, connectivity=6)
-        updated_mask = np.zeros_like(mask)
+        updated_mask = np.zeros_like(mask, dtype=bool)
 
-        check_size_threshold = np.sum(mask)/10
+        voxel_count = np.count_nonzero(mask)
+        size_threshold = voxel_count / 10 if voxel_count > 0 else check_size_threshold
+
         # Prepare KDTree for adjacent organs
         adj_organs = [adj for adj in organ_adjacency_map[organ] if adj in organ_centers]
         if adj_organs:
@@ -522,35 +514,40 @@ def reassign_false_positives(segmentation_dict: dict, organ_adjacency_map: dict,
         else:
             adj_tree = None
 
-        for cc_id in np.unique(cc_map):
-            if cc_id == 0:
-                continue
+        # Get all unique component labels except background
+        labels = np.unique(cc_map)
+        labels = labels[labels != 0]
+
+        for cc_id in labels:
             cc_mask = (cc_map == cc_id)
-            if np.sum(cc_mask) < check_size_threshold:
+
+            if cc_mask.sum() < size_threshold:
                 continue
-            
-            cc_center = np.array(compute_center(cc_mask))
+
+            cc_center = compute_center(cc_mask)
             if cc_center is None:
                 continue
+            cc_center = np.array(cc_center)
 
-            # Compare distances using KDTree
-            dist_self = np.linalg.norm(cc_center - organ_center)
+            dist_self_sq = np.sum((cc_center - organ_center) ** 2)
 
             if adj_tree is None:
-                updated_mask[cc_mask] = 1
+                updated_mask[cc_mask] = True
                 continue
 
-            dist_adj, idx_adj = adj_tree.query(cc_center)
-            if dist_adj < dist_self:
+            dist_adj_sq, idx_adj = adj_tree.query(cc_center)
+            dist_adj_sq = dist_adj_sq**2
+
+            if dist_adj_sq < dist_self_sq:
                 adj_organ = adj_organs[idx_adj]
                 if adj_organ not in segmentation_dict:
-                    segmentation_dict[adj_organ] = np.zeros_like(mask)
-                segmentation_dict[adj_organ][cc_mask] = 1
+                    segmentation_dict[adj_organ] = np.zeros_like(mask, dtype=bool)
+                segmentation_dict[adj_organ][cc_mask] = True
                 print(f"[INFO] Reassigned component from {organ} → {adj_organ}")
             else:
-                updated_mask[cc_mask] = 1
+                updated_mask[cc_mask] = True
 
-        segmentation_dict[organ] = updated_mask
+        segmentation_dict[organ] = updated_mask.astype(mask.dtype)
 
     return segmentation_dict
 

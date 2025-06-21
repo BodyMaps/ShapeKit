@@ -1,12 +1,23 @@
 import argparse
+import multiprocessing
 from multiprocessing import cpu_count
 from organs_postprocessing import *
 from tqdm import tqdm
 from config import affine_reference_file_name
+import logging
+
 
 
 reference_file_name =  affine_reference_file_name # affine info
 data_type = np.int16
+
+# set up logging 
+logging.basicConfig(
+    filename='postprocessing_errors.log',  
+    level=logging.INFO,
+    format='[%(levelname)s] %(asctime)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 ##############################################################
 
 
@@ -113,15 +124,24 @@ def process_case(sub_folder, input_folder, output_folder):
         output_path=output_folder
     )
 
+
 def run_in_parallel(sub_folders, input_folder, output_folder, max_workers=4):
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = [
-            executor.submit(process_case, sub_folder, input_folder, output_folder)
+        futures = {
+            executor.submit(process_case, sub_folder, input_folder, output_folder): sub_folder
             for sub_folder in sub_folders
-        ]
+        }
+
         for future in tqdm(as_completed(futures), total=len(futures), ncols=66, desc="Processing cases"):
-            
-            future.result()
+            sub_folder = futures[future]
+            try:
+                future.result()
+            except MemoryError as mem_err:
+                logging.error(f"MemoryError while processing {sub_folder}: {mem_err}")
+                print(f"[WARNING] MemoryError in {sub_folder}, skipping.")
+            except Exception as e:
+                logging.error(f"Exception while processing {sub_folder}: {e}")
+                print(f"[WARNING] Error in {sub_folder}, skipping.")
 
 
 parser = argparse.ArgumentParser(description="Anatomical-aware post-processing")
@@ -131,9 +151,6 @@ parser.add_argument('--cpu_count', type=int, default=cpu_count(), help='Number o
 args = parser.parse_args()
 
 
-print("[INFO] Parsed arguments:")
-for k, v in vars(args).items():
-    print(f"  {k}: {v}")
 
 if __name__ == '__main__':
 
@@ -142,5 +159,9 @@ if __name__ == '__main__':
     sub_folders = [sf for sf in os.listdir(input_folder) if sf != '.DS_Store']
     sub_folders.sort()
 
+    # safe execution without freezing the system
+    max_workers = min(args.cpu_count, len(sub_folders), multiprocessing.cpu_count() - 1)
+    print(f"[INFO] Starting... with {max_workers} multiprocess ...\n\n")
+    
     print(f"[INFO] Input files dir: {input_folder}\n[INFO] Output files dir: {output_folder}")
-    run_in_parallel(sub_folders, input_folder, output_folder, max_workers=args.cpu_count)
+    run_in_parallel(sub_folders, input_folder, output_folder, max_workers=max_workers)

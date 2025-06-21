@@ -4,6 +4,7 @@ import os
 import cc3d
 import copy
 from tqdm import tqdm
+from scipy.spatial import KDTree
 from scipy.ndimage import generate_binary_structure
 from scipy.ndimage import label, binary_fill_holes, binary_dilation, binary_erosion, binary_closing, center_of_mass
 from skimage.morphology import disk, convex_hull_image
@@ -15,7 +16,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.distance import cdist
 from nibabel.orientations import aff2axcodes
-
+import gc
 
 ####################################################################################
 # utils.py - Organ Segmentation Post-Processing Utilities
@@ -466,25 +467,6 @@ def smooth_binary_image(binary_image, iterations=1):
     return smoothed_image
 
 
-def smooth_segmentation(segmentation):
-    """
-    General smoothing.
-    """
-    smoothed_segmentation = np.zeros_like(segmentation)
-
-    unique_labels = np.unique(segmentation)
-    for label_id in tqdm(unique_labels, desc='[INFO] smoothing'):
-        if label_id == 0:
-            continue
-
-        mask = (segmentation == label_id).astype(int) 
-        smoothed_mask = smooth_binary_image(mask)
-        smoothed_segmentation[smoothed_mask] = label_id  
-
-    return smoothed_segmentation
-
-
-
 def reassign_left_right_based_on_liver(right_mask, left_mask, liver_mask):
     """
     Reassign left and right masks based on proximity to the liver.
@@ -538,6 +520,7 @@ def get_axis_map(img):
     
     return axis_map
 
+
 def bbox_distance(mask1, mask2):
     coords1 = np.argwhere(mask1)
     coords2 = np.argwhere(mask2)
@@ -557,12 +540,16 @@ def bbox_distance(mask1, mask2):
 
 
 
-def read_all_segmentations(folder_path, data_type=np.int16) -> dict:
+def read_all_segmentations(folder_path, data_type=np.uint8) -> dict:
     """
-    Read the segments of organs
+    Efficiently read segmentation masks from .nii.gz files and minimize memory use.
 
-    folder_path: the seg folder dir
-    
+    Args:
+        folder_path (str): Path to the parent folder containing the 'segmentations' subfolder.
+        data_type (np.dtype): Target data type for masks (e.g., np.uint8, np.bool_).
+
+    Returns:
+        dict: Organ name → binary/label mask as NumPy array.
     """
     seg_folder = os.path.join(folder_path, 'segmentations')
     segmentation_dict = {}
@@ -571,11 +558,19 @@ def read_all_segmentations(folder_path, data_type=np.int16) -> dict:
         raise FileNotFoundError(f"[ERROR] Folder not found: {seg_folder}")
 
     for file in os.listdir(seg_folder):
-        if file.endswith(".nii.gz"):
-            organ_name = os.path.splitext(os.path.splitext(file)[0])[0]  # remove .nii.gz
-            file_path = os.path.join(seg_folder, file)
-            nii_img = nib.load(file_path)
-            segmentation_dict[organ_name] = nii_img.get_fdata().astype(data_type)
+        if not file.endswith(".nii.gz"):
+            continue
+
+        organ_name = os.path.splitext(os.path.splitext(file)[0])[0]  # Remove .nii.gz
+        file_path = os.path.join(seg_folder, file)
+
+        nii_img = nib.load(file_path)
+        # Read only the raw data, avoiding float64 unless necessary
+        arr = np.asanyarray(nii_img.dataobj).astype(data_type)
+        segmentation_dict[organ_name] = arr
+
+        del nii_img, arr
+        gc.collect()  # uncomment if processing thousands of files in a loop
 
     return segmentation_dict
 
@@ -616,13 +611,17 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
         if np.any(mask):
             organ_img = nib.Nifti1Image(mask.astype(np.uint8), affine=reference_img.affine, header=reference_img.header)
             nib.save(organ_img, os.path.join(seg_folder, f"{organ}.nii.gz"))
+            del organ_img  # Free memory
+            gc.collect()
 
             # Combine masks: higher index can overwrite previous ones (if needed)
             combined[mask] = index
+
     if if_save_combined:
         # Save combined label file (one write)
         combined_img = nib.Nifti1Image(combined, affine=reference_img.affine, header=reference_img.header)
         nib.save(combined_img, os.path.join(output_folder, combined_filename))
-        
+        del combined_img
+        gc.collect()        
     
     print(f"[Info] Finished. Saved to {output_folder} ...")
