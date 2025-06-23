@@ -61,8 +61,8 @@ done < requirements.txt
 
 # Run ShapeKit
 ```bash
-export inputs="/mnt/bodymaps/mask_only/AbdomenAtlasPro/AbdomenAtlasPro"
-export outputs="/mnt/T9/temp_data_to_delete_very_soon/zzhou82/AAPro_jliu452_ccvl40"
+export inputs="/path/to/your/input/folder"
+export outputs="/path/to/your/output/folder"
 
 python -W ignore main.py --input_folder $inputs --output_folder $outputs --cpu_count 16
 ```
@@ -84,8 +84,13 @@ INPUT or OUTPUT
 >  If you set outputs and inputs the same, the system will automatically overwrite the orginal folder.
 
 # Key Post-Processing Functions
+Here outlines several key post-processing functions designed to handle common segmentation errors across multiple organs. In addition to these general utilities, organ-specific correction functions are also available in [post_processing.py](post_processing.py).
+
 ## remove_small_components
 Removes small, disconnected regions from a binary segmentation mask, helping to eliminate noise and improve anatomical plausibility.
+
+<details>
+<summary><strong> ❇️ detailed info</strong></summary>
 
 **Signature:**  
 `remove_small_components(mask: np.ndarray, threshold: int)`
@@ -101,10 +106,16 @@ Removes small, disconnected regions from a binary segmentation mask, helping to 
 ```python
 cleaned_mask = remove_small_components(mask, threshold=100)
 ```
+</details>
+
+### Applicable to: `all organs`
+
 
 ## reassign_false_positives
 Reassigns false positive regions between anatomically adjacent organs, based on spatial proximity. Improves segmentation specificity by correcting mislabeling.
 
+<details>
+<summary><strong> ❇️ detailed info</strong></summary>
 
 **Signature:** 
 
@@ -122,10 +133,17 @@ Reassigns false positive regions between anatomically adjacent organs, based on 
 ```python
 segmentation_dict = reassign_FalsePositives(segmentation_dict, organ_adjacency_map)
 ```
+</details>
+
+### Applicable to: `all organs`
+
 
 ## suppress_non_largest_components_binary
 
 Keeps only the N largest connected components in a binary mask, removing smaller fragments.
+
+<details>
+<summary><strong> ❇️ detailed info</strong></summary>
 
 **Signature:**  
 `suppress_non_largest_components_binary(mask: np.ndarray, keep_top: int = 2):`
@@ -141,10 +159,16 @@ Keeps only the N largest connected components in a binary mask, removing smaller
 ```python
 dominant_mask = suppress_non_largest_components_binary(mask, keep_top=2)
 ```
+</details>
+
+### Applicable to: `all organs`
 
 ## split_right_left
 
 Splits a symmetric organ mask into right and left components along a specified axis.
+
+<details>
+<summary><strong> ❇️ detailed info</strong></summary>
 
 **Signature:**  
 `split_right_left(mask: np.ndarray, AXIS: int = 0):`
@@ -160,10 +184,15 @@ Splits a symmetric organ mask into right and left components along a specified a
 ```python
 right_mask, left_mask = split_right_left(organ_mask, AXIS=0)
 ```
+</details>
+
+### Applicable to: `adrenal glands `, `lungs`, `kidneys`, `femurs`
 
 ## reassign_left_right_based_on_liver
-
 Corrects left and right assignments for organs using the liver as a spatial reference (assumed right-side).
+
+<details>
+<summary><strong> ❇️ detailed info</strong></summary>
 
 **Signature:**  
 `reassign_left_right_based_on_liver(right_mask: np.ndarray, left_mask: np.ndarray, liver_mask: np.ndarray):`
@@ -181,6 +210,40 @@ Corrects left and right assignments for organs using the liver as a spatial refe
 corrected_right, corrected_left = reassign_left_right_based_on_liver(
     right_mask, left_mask, liver_mask)
 ```
+</details>
+
+### Applicable to: `adrenal glands`, `lungs`, `kidneys`, `femurs`
+
+## check_organ_location
+
+Removes anatomically implausible voxels from organ segmentations based on spatial relationships with a reference organ (e.g., kidney or liver).
+<details>  
+<summary><strong> ❇️ detailed info</strong></summary>  
+
+**Signature** 
+
+`check_organ_location(segmentation_dict: dict, organ_mask: np.ndarray, organ_name: str, AXIS_Z: int, reference: str = 'kidney_left'):`
+
+**Parameters:**
+- `segmentation_dict` (`dict`): Dictionary mapping organ names to their binary 3D masks.  
+- `organ_mask` (`np.ndarray`): Binary mask.  
+- `organ_name` (`str`): Name of the organ (used for logging/debugging).  
+- `AXIS_Z` (`int`): Axis representing the superior-inferior (head-to-foot) direction.  
+- `reference` (`str`): Organ used as an anatomical reference point (default: `'kidney_left'`). Falls back to `'liver'` if unavailable.
+
+**Returns:**
+- `np.ndarray`: Corrected binary mask with implausible voxels removed.
+
+**Example**
+```python
+organ_mask =  check_organ_location(segmentation_dict, organ_mask, 'organ_name', axis_map['z'])
+```
+
+</details>
+
+### Applicable to: `bladder`, `femurs`, `prostate`
+
+
 
 
 # Related Articles
