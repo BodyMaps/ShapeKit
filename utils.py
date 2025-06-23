@@ -17,6 +17,8 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.distance import cdist
 from nibabel.orientations import aff2axcodes
 import gc
+from copy import deepcopy
+
 
 ####################################################################################
 # utils.py - Organ Segmentation Post-Processing Utilities

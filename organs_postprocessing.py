@@ -46,6 +46,9 @@ def post_processing_pancreas(segmentation_dict, dice_threshold=0.05):
         head_mask     = segmentation_dict['pancreas_head']
         body_mask     = segmentation_dict['pancreas_body']
         tail_mask     = segmentation_dict['pancreas_tail']
+        
+        temp = head_mask[2]
+        del temp
 
         # Combine parts
         combined_parts_mask = ((head_mask + body_mask + tail_mask) > 0).astype(data_type)
@@ -61,7 +64,7 @@ def post_processing_pancreas(segmentation_dict, dice_threshold=0.05):
 
     except:
         
-        new_pancreas_mask = suppress_non_largest_components_binary(pancreas_mask, keep_top=2)
+        new_pancreas_mask = suppress_non_largest_components_binary(pancreas_mask)
 
     
     # update
@@ -390,8 +393,32 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
     """
     
     # for the case lung is not in the abdominal reference area
-    segmentation_dict = dongli_lung_constraints(segmentation_dict, axis_map, 'lung_left')
-    segmentation_dict = dongli_lung_constraints(segmentation_dict, axis_map, 'lung_right')
+    segmentation_dict_new = deepcopy(segmentation_dict)
+    segmentation_dict_new = dongli_lung_constraints(segmentation_dict_new, axis_map, 'lung_left')
+    segmentation_dict_new = dongli_lung_constraints(segmentation_dict_new, axis_map, 'lung_right')
+
+    # compute Z bounds
+    colon_mask = segmentation_dict_new.get('colon')
+    liver_mask = segmentation_dict_new.get('liver')
+    Z = axis_map['z']
+
+    colon_z = np.where(colon_mask)[Z]
+    liver_z = np.where(liver_mask)[Z]
+
+    z_bound1 = np.min(colon_z)
+    z_bound2 = np.max(colon_z)
+    z_liver = np.mean(liver_z)
+
+    if z_bound1 < z_liver < z_bound2:
+        print("[Info] Ineffective lung reassignment, fall back ...")
+        # Free memory used by temp copy
+        del segmentation_dict_new
+        gc.collect()
+    else:
+        
+        del segmentation_dict  # old version no longer needed
+        gc.collect()
+        segmentation_dict = segmentation_dict_new
 
     lung_left = segmentation_dict.get("lung_left", None)
     lung_right = segmentation_dict.get("lung_right", None)
@@ -482,7 +509,52 @@ def post_processing_aorta_postcava(segmentation_dict:dict):
     return segmentation_dict
 
 
+def post_processing_adrenal_gland(segmentation_dict: dict, axis_map: dict, calibration_standards_mask: np.ndarray) -> dict:
+    """
+    Post-processing for adrenal glands: assigns correct left/right using liver position.
+    """
+    adrenal_left = segmentation_dict.get("adrenal_gland_left", None)
+    adrenal_right = segmentation_dict.get("adrenal_gland_right", None)
+
+    if adrenal_left is None or adrenal_right is None:
+        print("[WARNING] Missing adrenal gland masks in segmentation_dict.")
+        return segmentation_dict
+
+    adrenal_mask = ((adrenal_left > 0) | (adrenal_right > 0)).astype(np.uint8)
+    adrenal_mask = remove_small_components(adrenal_mask, np.sum(adrenal_mask) / 10)
+
+    # Split left/right
+    right_mask, left_mask = split_right_left(adrenal_mask, AXIS=axis_map['x'])
+    
+    # right and left
+    right_mask, left_mask = reassign_left_right_based_on_liver(
+        right_mask,
+        left_mask,
+        calibration_standards_mask
+    )
+
+    segmentation_dict['adrenal_gland_left'] = left_mask
+    segmentation_dict['adrenal_gland_right'] = right_mask
+
+    return segmentation_dict
+
+
 def reassign_false_positives(segmentation_dict: dict, organ_adjacency_map: dict, check_size_threshold=2000):
+    """
+    Reassign false positives between anatomically adjacent organs.
+
+
+    Args:
+        segmentation_dict (dict): A dictionary mapping organ 
+        names to binary masks. 
+        organ_adjacency_map (dict): A dictionary defining 
+        spatial adjacency between organs. 
+        check_size_threshold (int, optional): Minimum component 
+        size to consider for reassignment. 
+                                              
+    Returns:
+        dict: Updated segmentation dictionary.
+    """
     organ_centers = {}
     organ_masks = {}
 
@@ -492,6 +564,7 @@ def reassign_false_positives(segmentation_dict: dict, organ_adjacency_map: dict,
             continue
         if mask is None or mask.sum() == 0:
             continue
+
         center = compute_center(mask)
         if center is not None:
             organ_masks[organ] = mask
@@ -548,36 +621,5 @@ def reassign_false_positives(segmentation_dict: dict, organ_adjacency_map: dict,
                 updated_mask[cc_mask] = True
 
         segmentation_dict[organ] = updated_mask.astype(mask.dtype)
-
-    return segmentation_dict
-
-    
-
-def post_processing_adrenal_gland(segmentation_dict: dict, axis_map: dict, calibration_standards_mask: np.ndarray) -> dict:
-    """
-    Post-processing for adrenal glands: assigns correct left/right using liver position.
-    """
-    adrenal_left = segmentation_dict.get("adrenal_gland_left", None)
-    adrenal_right = segmentation_dict.get("adrenal_gland_right", None)
-
-    if adrenal_left is None or adrenal_right is None:
-        print("[WARNING] Missing adrenal gland masks in segmentation_dict.")
-        return segmentation_dict
-
-    adrenal_mask = ((adrenal_left > 0) | (adrenal_right > 0)).astype(np.uint8)
-    adrenal_mask = remove_small_components(adrenal_mask, np.sum(adrenal_mask) / 10)
-
-    # Split left/right
-    right_mask, left_mask = split_right_left(adrenal_mask, AXIS=axis_map['x'])
-    
-    # right and left
-    right_mask, left_mask = reassign_left_right_based_on_liver(
-        right_mask,
-        left_mask,
-        calibration_standards_mask
-    )
-
-    segmentation_dict['adrenal_gland_left'] = left_mask
-    segmentation_dict['adrenal_gland_right'] = right_mask
 
     return segmentation_dict

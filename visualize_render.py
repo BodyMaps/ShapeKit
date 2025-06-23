@@ -11,7 +11,7 @@ from utils import fill_holes
 group_dict = {
     '1': ['lung_left', 'lung_right', 'esophagus', 'liver', 'gall_bladder', 'hepatic_vessel', 'portal_vein_and_splenic_vein', 'kidney_left', 'kidney_right', 'adrenal_gland_left', 'adrenal_gland_right', 'postcava'],
     '2': ['stomach', 'pancreas', 'duodenum', 'colon', 'intestine', 'rectum'],
-    '3': ['aorta', 'celiac_trunk', 'bladder', 'prostate', 'femur_left', 'femur_right']
+    '3': ['femur_left', 'femur_right', 'aorta', 'celiac_trunk', 'bladder', 'prostate']
 }
 
 
@@ -119,7 +119,7 @@ if __name__ == '__main__':
 
     render_3d_fast(
         segmentation_mask=mask, 
-        zoom_factor=1.2,
+        zoom_factor=1,
         AXIS_z=2, 
         save_path=f'figs/{str(save_name)}_group{group.upper()}', 
         z_reverse_bool=False,
