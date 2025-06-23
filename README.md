@@ -108,7 +108,7 @@ cleaned_mask = remove_small_components(mask, threshold=100)
 ```
 </details>
 
-### Applicable to: `all organs`
+**Applicable to:** `all organs`
 
 
 ## reassign_false_positives
@@ -135,7 +135,7 @@ segmentation_dict = reassign_FalsePositives(segmentation_dict, organ_adjacency_m
 ```
 </details>
 
-### Applicable to: `all organs`
+**Applicable to:** `all organs`
 
 
 ## suppress_non_largest_components_binary
@@ -161,7 +161,7 @@ dominant_mask = suppress_non_largest_components_binary(mask, keep_top=2)
 ```
 </details>
 
-### Applicable to: `all organs`
+**Applicable to:** `all organs`
 
 ## split_right_left
 
@@ -186,7 +186,7 @@ right_mask, left_mask = split_right_left(organ_mask, AXIS=0)
 ```
 </details>
 
-### Applicable to: `adrenal glands `, `lungs`, `kidneys`, `femurs`
+**Applicable to:** `adrenal glands `, `lungs`, `kidneys`, `femurs`
 
 ## reassign_left_right_based_on_liver
 Corrects left and right assignments for organs using the liver as a spatial reference (assumed right-side).
@@ -212,7 +212,7 @@ corrected_right, corrected_left = reassign_left_right_based_on_liver(
 ```
 </details>
 
-### Applicable to: `adrenal glands`, `lungs`, `kidneys`, `femurs`
+**Applicable to:** `adrenal glands`, `lungs`, `kidneys`, `femurs`
 
 ## check_organ_location
 
@@ -241,7 +241,7 @@ organ_mask =  check_organ_location(segmentation_dict, organ_mask, 'organ_name', 
 
 </details>
 
-### Applicable to: `bladder`, `femurs`, `prostate`
+**Applicable to:** `bladder`, `femurs`, `prostate`
 
 
 
