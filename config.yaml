@@ -1,0 +1,61 @@
+# mapping dict, remember to change
+class_map:
+  1: aorta
+  2: gall_bladder
+  3: kidney_left
+  4: kidney_right
+  5: liver
+  6: pancreas
+  7: postcava
+  8: spleen
+  9: stomach
+  10: adrenal_gland_left
+  11: adrenal_gland_right
+  12: bladder
+  13: celiac_trunk
+  14: colon
+  15: duodenum
+  16: esophagus
+  17: femur_left
+  18: femur_right
+  19: hepatic_vessel
+  20: intestine
+  21: lung_left
+  22: lung_right
+  23: portal_vein_and_splenic_vein
+  24: prostate
+  25: rectum
+
+# plug-and-play like Lego! choose organs for processing
+target_organs:
+  - adrenal_gland
+  - aorta
+  - bladder
+  - colon
+  - duodenum
+  - femur
+  - intestine
+  - kidney
+  - liver
+  - lung
+  - pancreas
+  - postcava
+  - prostate
+  - spleen
+  - stomach
+
+# list of false positive suspects
+organ_adjacency_map:
+  lung_left: [postcava]
+  lung_right: [postcava]
+  liver: [kidney_right, pancreas]
+  pancreas: [liver, stomach, colon, intestine]
+  spleen: [liver]
+  kidney_left: [liver]
+  stomach: [pancreas, intestine, colon]
+  aorta: [postcava]
+  postcava: [aorta]
+  colon: [intestine, lung_left, lung_right]
+
+# affine reference, default as liver
+affine_reference_file_name: segmentations/liver.nii.gz
