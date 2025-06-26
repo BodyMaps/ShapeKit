@@ -66,8 +66,6 @@ export outputs="/path/to/your/output/folder"
 
 python -W ignore main.py --input_folder $inputs --output_folder $outputs --cpu_count 16
 ```
-> [!IMPORTANT]
-> Before running any commands, please ensure that `config.py` is properly configured, with special attention to the anatomical mapping dictionary `class_map`. This mapping is critical for correct organ identification and post-processing.
 
 ## Plug-and-Play Configuration ➡️
 Before running ShapeKit, simply edit the `config.yaml` file to match your needs—no coding required. Use the target_organs section to specify which organs you want to process (e.g., liver, lung, pancreas), just like snapping together Lego blocks. 
@@ -87,6 +85,9 @@ target_organs: (example)
 ```
 
 Also for other configuration setting please check [the config file](config.yaml).
+
+> [!IMPORTANT]
+> Before running any commands, please ensure that `config.yaml` is properly configured, with special attention to the anatomical mapping dictionary `class_map`. This mapping is critical for correct organ identification and post-processing.
 
 # Data Structure
 The input and output files will be formated as:
