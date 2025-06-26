@@ -3,9 +3,13 @@ import multiprocessing
 from multiprocessing import cpu_count
 from organs_postprocessing import *
 from tqdm import tqdm
-from config import affine_reference_file_name
 import logging
+import yaml
 
+with open('config.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+affine_reference_file_name = config['affine_reference_file_name']
+target_organs = set(config.get('target_organs', []))
 
 
 reference_file_name =  affine_reference_file_name # affine info
@@ -37,39 +41,48 @@ def combine_segmentation_dict(segmentation_dict: dict, class_map: dict) -> np.nd
     return combined
 
 
-def process_organs(segmentation_dict:dict, reference_img, combined_seg:np.array):
+def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.array, target_organs: set):
     """
-    Apply organ-specific post-processing functions to the segmentation dict.
-    Organs not listed in defined functions will be ignored.
+    Apply organ-specific post-processing functions to the segmentation dict
+    based on user-defined target organs.
     """
-
-    # get the affine axis
     axis_map = get_axis_map(reference_img)
-
-    # deal with fp
     segmentation_dict = reassign_false_positives(segmentation_dict, organ_adjacency_map)
 
-    # larger organs piror to smaller ones
-    segmentation_dict = post_processing_stomach(segmentation_dict)
-    segmentation_dict = post_processing_liver(segmentation_dict)
-    segmentation_dict = post_processing_pancreas(segmentation_dict)
-    segmentation_dict = post_processing_colon_intestine(segmentation_dict)
-    segmentation_dict = post_processing_spleen(segmentation_dict)
-    segmentation_dict = post_processing_duodenum(segmentation_dict)
+    # Apply processing only if target organ is in the list
+    if 'stomach' in target_organs:
+        segmentation_dict = post_processing_stomach(segmentation_dict)
+    if 'liver' in target_organs:
+        segmentation_dict = post_processing_liver(segmentation_dict)
+    if 'pancreas' in target_organs:
+        segmentation_dict = post_processing_pancreas(segmentation_dict)
+    if 'colon' in target_organs or 'intestine' in target_organs:
+        segmentation_dict = post_processing_colon_intestine(segmentation_dict)
+    if 'spleen' in target_organs:
+        segmentation_dict = post_processing_spleen(segmentation_dict)
+    if 'duodenum' in target_organs:
+        segmentation_dict = post_processing_duodenum(segmentation_dict)
 
-    # for calibration to define which one shall be on the right side
     calibration_standards_mask = segmentation_dict.get('liver')
-    
-    segmentation_dict = post_processing_lung(segmentation_dict, axis_map, calibration_standards_mask)
-    segmentation_dict = post_processing_kidney(segmentation_dict, axis_map, calibration_standards_mask)
-    segmentation_dict = post_processing_femur(segmentation_dict, axis_map, calibration_standards_mask)
-    segmentation_dict = post_processing_adrenal_gland(segmentation_dict, axis_map, calibration_standards_mask)
 
-    segmentation_dict = post_processing_aorta_postcava(segmentation_dict)
-    segmentation_dict = post_processing_bladder_prostate(segmentation_dict, # use the combined seg for calibration
-                                                         segmentation= combined_seg,
-                                                         axis=axis_map['z'])
-    
+    if 'lung' in target_organs:
+        segmentation_dict = post_processing_lung(segmentation_dict, axis_map, calibration_standards_mask)
+    if 'kidney' in target_organs:
+        segmentation_dict = post_processing_kidney(segmentation_dict, axis_map, calibration_standards_mask)
+    if 'femur' in target_organs:
+        segmentation_dict = post_processing_femur(segmentation_dict, axis_map, calibration_standards_mask)
+    if 'adrenal_gland' in target_organs:
+        segmentation_dict = post_processing_adrenal_gland(segmentation_dict, axis_map, calibration_standards_mask)
+
+    if 'aorta' in target_organs or 'postcava' in target_organs:
+        segmentation_dict = post_processing_aorta_postcava(segmentation_dict)
+    if 'bladder' in target_organs or 'prostate' in target_organs:
+        segmentation_dict = post_processing_bladder_prostate(
+            segmentation_dict,
+            segmentation=combined_seg,
+            axis=axis_map['z']
+        )
+
     return segmentation_dict
 
 
@@ -96,7 +109,8 @@ def main(input_path, input_folder_name, output_path=None):
     postprocessed_segmentation_dict = process_organs(
         segmentation_dict, 
         img,
-        segmentation)
+        segmentation,
+        target_organs)
     
     # save
     save_folder_path = os.path.join(output_path, input_folder_name)
@@ -121,7 +135,7 @@ def process_case(sub_folder, input_folder, output_folder):
     main(
         input_path=input_path,
         input_folder_name=sub_folder,
-        output_path=output_folder
+        output_path=output_folder,
     )
 
 

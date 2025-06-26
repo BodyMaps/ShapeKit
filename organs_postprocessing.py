@@ -1,7 +1,14 @@
 from utils import *
 
+
+with open('config.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+
+class_map = config['class_map']
+class_map = {int(k): v for k, v in config['class_map'].items()}
+organ_adjacency_map = config['organ_adjacency_map']
 data_type = np.int16
-from config import class_map, organ_adjacency_map
+
 
 
 
