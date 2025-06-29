@@ -1,5 +1,5 @@
 # folder name to contain all the organ files in a case
-subfolder_name: predictions
+subfolder_name: segmentations
 
 # mapping dict, remember to change
 class_map:
