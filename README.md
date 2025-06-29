@@ -23,6 +23,9 @@ Junqi Liu*, Dongli He*, [Wenxuan Li](https://scholar.google.com/citations?hl=en&
 
 <a href='https://www.zongweiz.com/dataset'><img src='https://img.shields.io/badge/Project-Page-Green'></a> <a href='https://www.cs.jhu.edu/~zongwei/publication/liu2025shapekit.pdf'><img src='https://img.shields.io/badge/Paper-PDF-purple'></a>
 
+# News
+
+* 2025.7.1 We released ShapeKit 1.0.
 # Installation
 
 Clone the repository and install dependencies:

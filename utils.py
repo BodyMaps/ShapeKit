@@ -542,18 +542,20 @@ def bbox_distance(mask1, mask2):
 
 
 
-def read_all_segmentations(folder_path, data_type=np.uint8) -> dict:
+def read_all_segmentations(folder_path, subfolder_name ='segmentations', data_type=np.uint8) -> dict:
     """
     Efficiently read segmentation masks from .nii.gz files and minimize memory use.
 
     Args:
-        folder_path (str): Path to the parent folder containing the 'segmentations' subfolder.
+        folder_path (str): Path to the parent folder containing the 'subfolder_name' subfolder.
+        subfolder_name (str): subfolder name. Default as 'segmentations'.
         data_type (np.dtype): Target data type for masks (e.g., np.uint8, np.bool_).
+
 
     Returns:
         dict: Organ name → binary/label mask as NumPy array.
     """
-    seg_folder = os.path.join(folder_path, 'segmentations')
+    seg_folder = os.path.join(folder_path, subfolder_name)
     segmentation_dict = {}
 
     if not os.path.exists(seg_folder):

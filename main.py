@@ -8,7 +8,8 @@ import yaml
 
 with open('config.yaml', 'r') as f:
     config = yaml.safe_load(f)
-affine_reference_file_name = config['affine_reference_file_name']
+subfolder_name = config['subfolder_name']
+affine_reference_file_name = os.path.join(subfolder_name, config['affine_reference_file_name'])
 target_organs = set(config.get('target_organs', []))
 
 
@@ -99,7 +100,8 @@ def main(input_path, input_folder_name, output_path=None):
     
     # load segmentations
     segmentation_dict = read_all_segmentations(
-        folder_path=input_path
+        folder_path=input_path,
+        subfolder_name=subfolder_name
     )
 
     # combine later as calibration reference
@@ -153,9 +155,9 @@ def run_in_parallel(sub_folders, input_folder, output_folder, max_workers=4):
             except MemoryError as mem_err:
                 logging.error(f"MemoryError while processing {sub_folder}: {mem_err}")
                 print(f"[WARNING] MemoryError in {sub_folder}, skipping.")
-            except Exception as e:
-                logging.error(f"Exception(Not MemError) while processing {sub_folder}: {e}")
-                print(f"[WARNING] Error in {sub_folder}, skipping.")
+            # except Exception as e:
+            #     logging.error(f"Exception(Not MemError) while processing {sub_folder}: {e}")
+            #     print(f"[WARNING] Error(Not MemError)  in {sub_folder}, skipping.")
 
 
 parser = argparse.ArgumentParser(description="Anatomical-aware post-processing")
