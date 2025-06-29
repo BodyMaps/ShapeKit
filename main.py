@@ -129,7 +129,7 @@ def main(input_path, input_folder_name, output_path=None):
 
 ############################## Parallel Execution ################################
 import os
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError, CancelledError
 
 def process_case(sub_folder, input_folder, output_folder):
     input_path = os.path.join(input_folder, sub_folder)
@@ -155,9 +155,10 @@ def run_in_parallel(sub_folders, input_folder, output_folder, max_workers=4):
             except MemoryError as mem_err:
                 logging.error(f"MemoryError while processing {sub_folder}: {mem_err}")
                 print(f"[WARNING] MemoryError in {sub_folder}, skipping.")
-            # except Exception as e:
-            #     logging.error(f"Exception(Not MemError) while processing {sub_folder}: {e}")
-            #     print(f"[WARNING] Error(Not MemError)  in {sub_folder}, skipping.")
+                
+            except Exception as e:
+                logging.error(f"Exception(Not MemError) while processing {sub_folder}: {e}")
+                print(f"[WARNING] Error(Not MemError)  in {sub_folder}, skipping.")
 
 
 parser = argparse.ArgumentParser(description="Anatomical-aware post-processing")
