@@ -68,7 +68,7 @@ python -W ignore main.py --input_folder $inputs --output_folder $outputs --cpu_c
 ```
 
 ## Plug-and-Play Configuration ➡️
-Before running ShapeKit, simply edit the `config.yaml` file to match your needs—no coding required. Use the target_organs section to specify which organs you want to process (e.g., liver, lung, pancreas), just like snapping together Lego blocks. 
+Before running ShapeKit, simply edit the `config.yaml` file to match your needs—no coding required. Use the `target_organs` section to specify which organs you want to process (e.g., liver, lung, pancreas), just like snapping together Lego blocks. 
 
 ```
 # plug-and-play like Lego! choose organs for processing

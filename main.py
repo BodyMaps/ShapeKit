@@ -154,7 +154,7 @@ def run_in_parallel(sub_folders, input_folder, output_folder, max_workers=4):
                 logging.error(f"MemoryError while processing {sub_folder}: {mem_err}")
                 print(f"[WARNING] MemoryError in {sub_folder}, skipping.")
             except Exception as e:
-                logging.error(f"Exception while processing {sub_folder}: {e}")
+                logging.error(f"Exception(Not MemError) while processing {sub_folder}: {e}")
                 print(f"[WARNING] Error in {sub_folder}, skipping.")
 
 
