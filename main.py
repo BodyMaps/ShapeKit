@@ -98,7 +98,7 @@ def main(input_path, input_folder_name, output_path=None):
     seg_path = os.path.join(input_path, reference_file_name)
     img = nib.load(seg_path)
     
-    # load segmentations
+    # load segmentations, all the CTs are transformed according to affine info
     segmentation_dict = read_all_segmentations(
         folder_path=input_path,
         organ_list=organ_list,
@@ -107,7 +107,7 @@ def main(input_path, input_folder_name, output_path=None):
 
     # combine later as calibration reference
     segmentation = combine_segmentation_dict(segmentation_dict, class_map)
-
+    
     # process
     postprocessed_segmentation_dict = process_organs(
         segmentation_dict, 
@@ -158,9 +158,9 @@ def run_in_parallel(sub_folders, input_folder, output_folder, max_workers=4):
                 logging.error(f"MemoryError while processing {sub_folder}: {mem_err}")
                 print(f"[WARNING] MemoryError in {sub_folder}, skipping.")
 
-            except Exception as e:
-                logging.error(f"Exception(Not MemError) while processing {sub_folder}: {e}")
-                print(f"[WARNING] Error(Not MemError)  in {sub_folder}, skipping.")
+            # except Exception as e:
+            #     logging.error(f"Exception(Not MemError) while processing {sub_folder}: {e}")
+            #     print(f"[WARNING] Error(Not MemError)  in {sub_folder}, skipping.")
 
 
 parser = argparse.ArgumentParser(description="Anatomical-aware post-processing")

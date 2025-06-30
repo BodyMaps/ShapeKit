@@ -19,6 +19,13 @@ from nibabel.orientations import aff2axcodes
 import gc
 from copy import deepcopy
 import yaml
+from nibabel.orientations import (
+    io_orientation,
+    axcodes2ornt,
+    ornt_transform,
+    apply_orientation,
+)
+
 
 ####################################################################################
 # utils.py - Organ Segmentation Post-Processing Utilities
@@ -542,19 +549,21 @@ def bbox_distance(mask1, mask2):
 
 
 
-def read_all_segmentations(folder_path, organ_list, subfolder_name ='segmentations', data_type=np.uint8) -> dict:
+def read_all_segmentations(folder_path, organ_list, subfolder_name='segmentations',
+                           data_type=np.uint8, target_axcodes=('R', 'A', 'S')) -> dict:
     """
-    Efficiently read segmentation masks from .nii.gz files and minimize memory use.
+    Efficiently read segmentation masks from .nii.gz files, correct their orientation, 
+    and minimize memory use.
 
     Args:
         folder_path (str): Path to the parent folder containing the 'subfolder_name' subfolder.
         organ_list (list): Organs provided for postprocessing.
-        subfolder_name (str): subfolder name. Default as 'segmentations'.
+        subfolder_name (str): Subfolder name. Default as 'segmentations'.
         data_type (np.dtype): Target data type for masks (e.g., np.uint8, np.bool_).
-
+        target_axcodes (tuple): Desired orientation codes (e.g., ('R', 'A', 'S')).
 
     Returns:
-        dict: Organ name → binary/label mask as NumPy array.
+        dict: Organ name → binary/label mask as NumPy array with corrected orientation.
     """
     seg_folder = os.path.join(folder_path, subfolder_name)
     segmentation_dict = {}
@@ -562,21 +571,31 @@ def read_all_segmentations(folder_path, organ_list, subfolder_name ='segmentatio
     if not os.path.exists(seg_folder):
         raise FileNotFoundError(f"[ERROR] Folder not found: {seg_folder}")
 
-    for file in os.listdir(seg_folder):
-        organ = file.replace(".nii.gz", "")
-        if not file.endswith(".nii.gz") or not organ in organ_list:
-            continue
-        
-        organ_name = os.path.splitext(os.path.splitext(file)[0])[0]  # Remove .nii.gz
-        file_path = os.path.join(seg_folder, file)
+    files = [f for f in os.listdir(seg_folder) if f.endswith('.nii.gz')]
+    first_valid_file = files[0]
+    
+    if first_valid_file is None:
+        raise ValueError("[ERROR] No valid segmentation files found.")
 
+    # Extract reference orientation from first valid segmentation
+    ref_img = nib.load(os.path.join(seg_folder, first_valid_file))
+    orig_ornt = io_orientation(ref_img.affine)
+    target_ornt = axcodes2ornt(target_axcodes)
+    transform = ornt_transform(orig_ornt, target_ornt)
+
+    for file in files:
+        organ = os.path.splitext(os.path.splitext(file)[0])[0]  # Remove .nii.gz
+        if organ not in organ_list:
+            continue
+
+        file_path = os.path.join(seg_folder, file)
         nii_img = nib.load(file_path)
-        # Read only the raw data, avoiding float64 unless necessary
         arr = np.asanyarray(nii_img.dataobj).astype(data_type)
-        segmentation_dict[organ_name] = arr
+        arr = apply_orientation(arr, transform)
+        segmentation_dict[organ] = arr
 
         del nii_img, arr
-        gc.collect()  # uncomment if processing thousands of files in a loop
+        gc.collect()
 
     return segmentation_dict
 

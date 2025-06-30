@@ -147,39 +147,39 @@ def post_processing_spleen(segmentation_dict):
     return segmentation_dict
 
 
-def check_z_reverse(segmentation_dict, AXIS_Z, check_organ_1='kidney_left', check_organ_2='lung_left')->bool:
-    """
-    Check if the Z-axis order of organs is reversed in the segmentation.
+# def check_z_reverse(segmentation_dict, AXIS_Z, check_organ_1='kidney_left', check_organ_2='lung_left')->bool:
+#     """
+#     Check if the Z-axis order of organs is reversed in the segmentation.
 
-    This function compares the mean Z positions of two organs (default: left kidney and left lung)
-    in a segmentation mask to determine if the order along the Z axis is anatomically reversed.
-    - In normal CT orientation, the lung (or stomach) should have a lower mean Z than the kidney.
-    - If the lung (or stomach) appears "below" the kidney (lung_z > kidney_z), this suggests a Z-axis flip.
+#     This function compares the mean Z positions of two organs (default: left kidney and left lung)
+#     in a segmentation mask to determine if the order along the Z axis is anatomically reversed.
+#     - In normal CT orientation, the lung (or stomach) should have a lower mean Z than the kidney.
+#     - If the lung (or stomach) appears "below" the kidney (lung_z > kidney_z), this suggests a Z-axis flip.
 
-    Notes:
-        - If the lung mask is missing or empty, the function tries the stomach mask as a backup.
-        - If the kidney mask is missing or empty, the function skips the check and returns False.
-        - Issues a warning if either organ is missing or empty.
-    """
-    kidney_mask = segmentation_dict.get(check_organ_1)
-    lung_mask = segmentation_dict.get(check_organ_2)
+#     Notes:
+#         - If the lung mask is missing or empty, the function tries the stomach mask as a backup.
+#         - If the kidney mask is missing or empty, the function skips the check and returns False.
+#         - Issues a warning if either organ is missing or empty.
+#     """
+#     kidney_mask = segmentation_dict.get(check_organ_1)
+#     lung_mask = segmentation_dict.get(check_organ_2)
 
-    if kidney_mask is None or not np.any(kidney_mask):
-        print("[WARNING] Kidney mask not found or empty. Skipping z check.")
-        return False
+#     if kidney_mask is None or not np.any(kidney_mask):
+#         print("[WARNING] Kidney mask not found or empty. Skipping z check.")
+#         return False
 
-    if lung_mask is None or not np.any(lung_mask):
-        print("[WARNING] Lung mask not found or empty. Use stomach instead.")
-        lung_mask = segmentation_dict.get('stomach')
+#     if lung_mask is None or not np.any(lung_mask):
+#         print("[WARNING] Lung mask not found or empty. Use stomach instead.")
+#         lung_mask = segmentation_dict.get('stomach')
         
 
-    # Detect Z-axis direction
-    lung_z = np.mean(np.argwhere(lung_mask)[:, AXIS_Z])
-    kidney_z = np.mean(np.argwhere(kidney_mask)[:, AXIS_Z])
-    reversed_z = lung_z > kidney_z  # Normally lung_z(stomach) < kidney_z in CTs
+#     # Detect Z-axis direction
+#     lung_z = np.mean(np.argwhere(lung_mask)[:, AXIS_Z])
+#     kidney_z = np.mean(np.argwhere(kidney_mask)[:, AXIS_Z])
+#     reversed_z = lung_z > kidney_z  # Normally lung_z(stomach) < kidney_z in CTs
 
     
-    return reversed_z
+#     return reversed_z
 
 
 def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, reference='kidney_left'):
@@ -191,8 +191,8 @@ def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, refe
     """
 
     reference_mask = segmentation_dict.get(reference)
-    reversed_z = check_z_reverse(segmentation_dict, AXIS_Z)
-    print(f"[INFO] Checking {organ_name}..., Z-axis reversed: {reversed_z}")
+    reversed_z = True
+    print(f"[INFO] Checking {organ_name}...")
 
     try:
         z_limit = np.mean(np.argwhere(reference_mask)[:, AXIS_Z])
@@ -238,7 +238,6 @@ def post_processing_femur(segmentation_dict: dict, axis_map: dict, calibration_s
 
     # Merge and clean
     femur_mask = ((femur_left > 0) | (femur_right > 0)).astype(np.uint8)
-
     femur_mask =  check_organ_location(segmentation_dict, femur_mask, 'femur', axis_map['z'])
 
     # set as 0
@@ -330,13 +329,6 @@ def dongli_lung_constraints(segmentation_dict, axis_map,
     assert target_label in ['lung_left', 'lung_right'], "Target must be 'lung_left' or 'lung_right'"
     lung_mask = segmentation_dict.get(target_label, None)
 
-    # use kidney and stomach to judege whether z is in a reversed sequence
-    reversed_z = check_z_reverse(
-        segmentation_dict, 
-        axis_map['z'],
-        check_organ_1='kidney_left',
-        check_organ_2='stomach')
-
     if lung_mask is None or not np.any(lung_mask):
         return segmentation_dict
 
@@ -370,7 +362,7 @@ def dongli_lung_constraints(segmentation_dict, axis_map,
 
         z_max = np.mean(coords[:, Z]) # use average position instead
 
-        if (reversed_z and z_max < z_lower_bound) or (not reversed_z and z_max > z_lower_bound):
+        if z_max < z_lower_bound:
             fallback_mask[tuple(coords.T)] = 1
             print(f"[INFO] Reassigned {target_label} component to {fallback_label}")
         else:
@@ -403,28 +395,26 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
     segmentation_dict_new = deepcopy(segmentation_dict)
     segmentation_dict_new = dongli_lung_constraints(segmentation_dict_new, axis_map, 'lung_left')
     segmentation_dict_new = dongli_lung_constraints(segmentation_dict_new, axis_map, 'lung_right')
-
-    # compute Z bounds
-    colon_mask = segmentation_dict_new.get('colon')
-    liver_mask = segmentation_dict_new.get('liver')
-    Z = axis_map['z']
-
-    colon_z = np.where(colon_mask)[Z]
-    liver_z = np.where(liver_mask)[Z]
-
-    z_bound1 = np.min(colon_z)
-    z_bound2 = np.max(colon_z)
-    z_liver = np.mean(liver_z)
-
-    if z_bound1 < z_liver < z_bound2:
-        print("[INFO] Ineffective lung reassignment, fall back ...")
-        # Free memory used by temp copy
-        del segmentation_dict_new
-        gc.collect()
+    
+    # double-check if wrongly reassigned by location of colon and liver
+    if np.sum(segmentation_dict_new.get('lung_left')) == 0 and np.sum(segmentation_dict_new.get('lung_right')) == 0 :
+        colon_mask = segmentation_dict_new.get('colon')
+        liver_mask = segmentation_dict_new.get('liver')
+        Z = axis_map['z']
+        colon_z = np.where(colon_mask)[Z]
+        liver_z = np.where(liver_mask)[Z]
+        z_check_bound = np.mean(colon_z)
+        z_liver = np.mean(liver_z)
+        if z_liver < z_check_bound:
+            print("[INFO] Ineffective lung reassignment, fall back ...")
+            
+            del segmentation_dict_new
+            gc.collect()
+        else:
+            del segmentation_dict  # old version no longer needed
+            gc.collect()
+            segmentation_dict = segmentation_dict_new
     else:
-        
-        del segmentation_dict  # old version no longer needed
-        gc.collect()
         segmentation_dict = segmentation_dict_new
 
     lung_left = segmentation_dict.get("lung_left", None)
