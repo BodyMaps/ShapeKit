@@ -1,4 +1,12 @@
-<h1 align="center">ShapeKit</h1>
+<!-- <h1 align="center">ShapeKit</h1> -->
+
+<div align="center">
+  <img src="./docs/ShapeKit.png" alt="ShapeKit" width="70%">
+</div>
+
+<!-- <div align="center">
+
+![logo](./docs/ShapeKit.png) -->
 
 <div align="center">
 
@@ -10,9 +18,22 @@
 
 </div>
 
-**ShapeKit** is a toolkit designed for medical segmentation research. 
+**ShapeKit** is a flexible and easy-to-use toolkit for medical CT segmentation research. 
+
+# Introduction
+
+It allows researchers and clinicians to correct segmentation errors in AI-predicted masks without the need to retrain models. Thanks to its plug-and-play design, ShapeKit can be seamlessly integrated into existing pipelines, making it a practical solution for improving segmentation quality across different organs and datasets.
 
 This repository provides a parallelized Python pipeline for anatomical-aware post-processing of multi-organ medical image segmentations. The workflow includes combining, refining, and anatomically calibrating predicted segmentations to produce robust and consistent output suitable for downstream analysis.
+
+Our documentation consists of the following sections:
+
+* Paper: the publication paper of ShapeKit.
+* New: updates on ShapeKit.
+* Installation: for preparing the environment.
+* Run ShapeKit: for applying the ShapeKit on the user-defined data.
+* Key Functions: several major functions for processing common shape errors.
+* Related Articles: related works.
 
 # Paper
 
@@ -87,12 +108,12 @@ target_organs: (example)
   - pancreas
 ```
 
-Also for other configuration setting please check [the config file](config.yaml).
+Also for other configuration setting please check [the config instructions file](config.md).
 
 > [!IMPORTANT]
 > Before running any commands, please ensure that `config.yaml` is properly configured, with special attention to the anatomical mapping dictionary `class_map`. This mapping is critical for correct organ identification and post-processing.
 
-# Data Structure
+## Data Structure
 The input and output files will be formated as:
 ```
 INPUT or OUTPUT
@@ -106,8 +127,8 @@ INPUT or OUTPUT
 > [!IMPORTANT] 
 >  If you set outputs and inputs the same, the system will automatically overwrite the orginal folder.
 
-# Key Post-Processing Functions
-Here outlines several key post-processing functions designed to handle common segmentation errors across multiple organs. In addition to these general utilities, organ-specific correction functions are also available in [post_processing.py](post_processing.py).
+# Key Functions
+Here outlines several key post-processing functions designed to handle common segmentation errors across multiple organs. In addition to these general utilities, organ-specific correction functions are also available in [organs_postprocessing.py](organs_postprocessing.py).
 
 ## remove_small_components
 Removes small, disconnected regions from a binary segmentation mask, helping to eliminate noise and improve anatomical plausibility.
