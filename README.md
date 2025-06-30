@@ -76,7 +76,7 @@ conda activate kit
 </details>
 
 ```bash
-git clone https://github.com/MrGiovanni/ShapeKit.git
+git clone https://github.com/BodyMaps/ShapeKit.git
 cd ShapeKit
 while read requirement; do
     pip install "$requirement" || echo "Failed to install $requirement, skipping..."
