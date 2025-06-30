@@ -110,7 +110,7 @@ target_organs: (example)
   - pancreas
 ```
 
-Also for other configuration setting please check [the config instructions file](config.md).
+Also for other configuration setting please check [the config instructions file](docs/config.md).
 
 > [!IMPORTANT]
 > Before running any commands, please ensure that `config.yaml` is properly configured, with special attention to the anatomical mapping dictionary `class_map`. This mapping is critical for correct organ identification and post-processing.
