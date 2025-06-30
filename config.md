@@ -20,7 +20,7 @@
 
 5. `affine_reference_file_name`: file to load affine reference info.
 
-6. `if_save_combined_label`: booling parameter, whether to save the combined labels as a *.nii.gz* file after processing. For example:
+6. `if_save_combined_label`: boolean parameter that controls whether to save the combined labels as a .nii.gz file after processing. For example:
 
     ```
     OUTPUT
