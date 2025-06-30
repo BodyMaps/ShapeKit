@@ -1,0 +1,5 @@
+cc3d
+nibabel
+numpy
+scipy
+tqdm
