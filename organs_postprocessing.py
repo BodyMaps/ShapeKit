@@ -101,7 +101,7 @@ def post_processing_colon_intestine(segmentation_dict):
         cleaned_intestine_mask = remove_small_components(intestine_mask, threshold=np.sum(intestine_mask)/10)
         segmentation_dict['intestine'] = cleaned_intestine_mask
     except:
-        print("[Info] Intestine does not exist, skipped ...")
+        print("[INFO] Intestine does not exist, skipped ...")
     return segmentation_dict
 
 
@@ -197,13 +197,13 @@ def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, refe
     try:
         z_limit = np.mean(np.argwhere(reference_mask)[:, AXIS_Z])
     except:
-        print(f"[Info] Organ location check failed with {reference}, now try liver")
+        print(f"[INFO] Organ location check failed with {reference}, now try liver")
         reference_mask = segmentation_dict.get('liver')
 
         try:
             z_limit = np.mean(np.argwhere(reference_mask)[:, AXIS_Z])
         except:
-            print(f"[Info] Still failed, skiping ...")
+            print(f"[INFO] Still failed, skiping ...")
             return organ_mask
         
 
@@ -417,7 +417,7 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
     z_liver = np.mean(liver_z)
 
     if z_bound1 < z_liver < z_bound2:
-        print("[Info] Ineffective lung reassignment, fall back ...")
+        print("[INFO] Ineffective lung reassignment, fall back ...")
         # Free memory used by temp copy
         del segmentation_dict_new
         gc.collect()

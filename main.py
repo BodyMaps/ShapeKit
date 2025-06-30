@@ -2,7 +2,6 @@ import argparse
 import multiprocessing
 from multiprocessing import cpu_count
 from organs_postprocessing import *
-from tqdm import tqdm
 import logging
 import yaml
 
@@ -11,14 +10,15 @@ with open('config.yaml', 'r') as f:
 subfolder_name = config['subfolder_name']
 affine_reference_file_name = os.path.join(subfolder_name, config['affine_reference_file_name'])
 target_organs = set(config.get('target_organs', []))
-
-
+organ_list = list(class_map.values())
 reference_file_name =  affine_reference_file_name # affine info
 data_type = np.int16
+save_combined_label_bool = bool(config['if_save_combined_label'])
+
 
 # set up logging 
 logging.basicConfig(
-    filename='postprocessing_errors.log',  
+    filename='postprocessing.log',  
     level=logging.INFO,
     format='[%(levelname)s] %(asctime)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
@@ -101,6 +101,7 @@ def main(input_path, input_folder_name, output_path=None):
     # load segmentations
     segmentation_dict = read_all_segmentations(
         folder_path=input_path,
+        organ_list=organ_list,
         subfolder_name=subfolder_name
     )
 
@@ -123,7 +124,7 @@ def main(input_path, input_folder_name, output_path=None):
         class_map=class_map,
         reference_img=img,
         output_folder=save_folder_path,
-        if_save_combined=False
+        if_save_combined=save_combined_label_bool
     )
 
 
@@ -147,15 +148,16 @@ def run_in_parallel(sub_folders, input_folder, output_folder, max_workers=4):
             executor.submit(process_case, sub_folder, input_folder, output_folder): sub_folder
             for sub_folder in sub_folders
         }
-
-        for future in tqdm(as_completed(futures), total=len(futures), ncols=66, desc="Processing cases"):
+        print(f"[INFO] Start processing, total case num. {len(futures)}")
+        for future in as_completed(futures):
             sub_folder = futures[future]
             try:
                 future.result()
+                logging.info(f"[ShapeKit] Successfully processed {sub_folder}")
             except MemoryError as mem_err:
                 logging.error(f"MemoryError while processing {sub_folder}: {mem_err}")
                 print(f"[WARNING] MemoryError in {sub_folder}, skipping.")
-                
+
             except Exception as e:
                 logging.error(f"Exception(Not MemError) while processing {sub_folder}: {e}")
                 print(f"[WARNING] Error(Not MemError)  in {sub_folder}, skipping.")

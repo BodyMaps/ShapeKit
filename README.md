@@ -22,14 +22,14 @@
 
 # Introduction
 
-It allows researchers and clinicians to correct segmentation errors in AI-predicted masks without the need to retrain models. Thanks to its plug-and-play design, ShapeKit can be seamlessly integrated into existing pipelines, making it a practical solution for improving segmentation quality across different organs and datasets.
+ShapeKit allows researchers and clinicians to correct segmentation errors in AI-predicted masks without the need to retrain models. Thanks to its plug-and-play design, ShapeKit can be seamlessly integrated into existing pipelines, making it a practical solution for improving segmentation quality across different organs and datasets.
 
 This repository provides a parallelized Python pipeline for anatomical-aware post-processing of multi-organ medical image segmentations. The workflow includes combining, refining, and anatomically calibrating predicted segmentations to produce robust and consistent output suitable for downstream analysis.
 
 Our documentation consists of the following sections:
 
 * Paper: the publication paper of ShapeKit.
-* New: updates on ShapeKit.
+* News: updates on ShapeKit.
 * Installation: for preparing the environment.
 * Run ShapeKit: for applying the ShapeKit on the user-defined data.
 * Key Functions: several major functions for processing common shape errors.
@@ -46,7 +46,7 @@ Junqi Liu*, Dongli He*, [Wenxuan Li](https://scholar.google.com/citations?hl=en&
 
 # News
 
-* 2025.7.1 We released ShapeKit 1.0.
+* 2025.6.30 We released ShapeKit 1.0.
 # Installation
 
 Clone the repository and install dependencies:
@@ -90,6 +90,8 @@ export outputs="/path/to/your/output/folder"
 
 python -W ignore main.py --input_folder $inputs --output_folder $outputs --cpu_count 16
 ```
+> [!IMPORTANT]
+> If the input data contains large CT segmentations (more than 1,000 slices), it’s best to keep `--cpu_count` at 10 or below.
 
 ## Plug-and-Play Configuration ➡️
 Before running ShapeKit, simply edit the `config.yaml` file to match your needs—no coding required. Use the `target_organs` section to specify which organs you want to process (e.g., liver, lung, pancreas), just like snapping together Lego blocks. 

@@ -542,12 +542,13 @@ def bbox_distance(mask1, mask2):
 
 
 
-def read_all_segmentations(folder_path, subfolder_name ='segmentations', data_type=np.uint8) -> dict:
+def read_all_segmentations(folder_path, organ_list, subfolder_name ='segmentations', data_type=np.uint8) -> dict:
     """
     Efficiently read segmentation masks from .nii.gz files and minimize memory use.
 
     Args:
         folder_path (str): Path to the parent folder containing the 'subfolder_name' subfolder.
+        organ_list (list): Organs provided for postprocessing.
         subfolder_name (str): subfolder name. Default as 'segmentations'.
         data_type (np.dtype): Target data type for masks (e.g., np.uint8, np.bool_).
 
@@ -562,9 +563,10 @@ def read_all_segmentations(folder_path, subfolder_name ='segmentations', data_ty
         raise FileNotFoundError(f"[ERROR] Folder not found: {seg_folder}")
 
     for file in os.listdir(seg_folder):
-        if not file.endswith(".nii.gz"):
+        organ = file.replace(".nii.gz", "")
+        if not file.endswith(".nii.gz") or not organ in organ_list:
             continue
-
+        
         organ_name = os.path.splitext(os.path.splitext(file)[0])[0]  # Remove .nii.gz
         file_path = os.path.join(seg_folder, file)
 
@@ -577,8 +579,6 @@ def read_all_segmentations(folder_path, subfolder_name ='segmentations', data_ty
         gc.collect()  # uncomment if processing thousands of files in a loop
 
     return segmentation_dict
-
-
 
 
 def save_and_combine_segmentations(processed_segmentation_dict: dict,
@@ -628,4 +628,5 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
         del combined_img
         gc.collect()        
     
-    print(f"[Info] Finished. Saved to {output_folder} ...")
+    del combined
+    gc.collect()

@@ -62,3 +62,5 @@ organ_adjacency_map:
 
 # affine reference, default as liver
 affine_reference_file_name: liver.nii.gz
+
+if_save_combined_label: False
