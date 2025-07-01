@@ -1,7 +1,7 @@
 <!-- <h1 align="center">ShapeKit</h1> -->
 
 <div align="center">
-  <img src="./docs/ShapeKit.png" alt="ShapeKit" width="70%">
+  <img src="./docs/social_preview.jpg" alt="ShapeKit" width="100%">
 </div>
 
 <!-- <div align="center">
