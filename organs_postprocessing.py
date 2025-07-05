@@ -215,6 +215,8 @@ def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, refe
         z = coord[AXIS_Z]
         if (not reversed_z and z < z_limit) or (reversed_z and z > z_limit):
             corrected_organ_mask[tuple(coord)] = 0
+        
+        del coord # free up space
 
     removed_voxels = np.sum(organ_mask) - np.sum(corrected_organ_mask)
     if removed_voxels > 0:
@@ -623,5 +625,5 @@ def reassign_false_positives(segmentation_dict: dict, organ_adjacency_map: dict,
         del cc_map, updated_mask  # Free memory
         gc.collect()
 
-        
+
     return segmentation_dict
