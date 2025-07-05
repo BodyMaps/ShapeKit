@@ -616,7 +616,12 @@ def reassign_false_positives(segmentation_dict: dict, organ_adjacency_map: dict,
                 print(f"[INFO] Reassigned component from {organ} → {adj_organ}")
             else:
                 updated_mask[cc_mask] = True
-
+            
+            del cc_mask  # Free temporary mask
         segmentation_dict[organ] = updated_mask.astype(mask.dtype)
 
+        del cc_map, updated_mask  # Free memory
+        gc.collect()
+
+        
     return segmentation_dict
