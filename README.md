@@ -47,6 +47,7 @@ Junqi Liu*, Dongli He*, [Wenxuan Li](https://scholar.google.com/citations?hl=en&
 # News
 
 * 2025.6.30 We released ShapeKit 1.0.
+  
 # Installation
 
 Clone the repository and install dependencies:
@@ -71,6 +72,17 @@ source ~/.bashrc
 ```bash
 conda create -n kit python=3.12 -y
 conda activate kit
+```
+</div>
+</details>
+
+<details>
+<summary style="margin-left: 25px;">[Optional 3] Merge Updates into Your Local Branch</summary>
+<div style="margin-left: 25px;">
+
+```bash
+git fetch
+git pull
 ```
 </div>
 </details>
