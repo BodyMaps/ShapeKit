@@ -552,18 +552,8 @@ def bbox_distance(mask1, mask2):
 def read_all_segmentations(folder_path, organ_list, subfolder_name='segmentations',
                            data_type=np.uint8, target_axcodes=('R', 'A', 'S')) -> dict:
     """
-    Efficiently read segmentation masks from .nii.gz files, correct their orientation, 
-    and minimize memory use.
-
-    Args:
-        folder_path (str): Path to the parent folder containing the 'subfolder_name' subfolder.
-        organ_list (list): Organs provided for postprocessing.
-        subfolder_name (str): Subfolder name. Default as 'segmentations'.
-        data_type (np.dtype): Target data type for masks (e.g., np.uint8, np.bool_).
-        target_axcodes (tuple): Desired orientation codes (e.g., ('R', 'A', 'S')).
-
-    Returns:
-        dict: Organ name → binary/label mask as NumPy array with corrected orientation.
+    Safely read segmentation masks from .nii.gz files, correct orientation,
+    and handle corrupt or missing files gracefully.
     """
     seg_folder = os.path.join(folder_path, subfolder_name)
     segmentation_dict = {}
@@ -572,30 +562,53 @@ def read_all_segmentations(folder_path, organ_list, subfolder_name='segmentation
         raise FileNotFoundError(f"[ERROR] Folder not found: {seg_folder}")
 
     files = [f for f in os.listdir(seg_folder) if f.endswith('.nii.gz')]
-    first_valid_file = files[0]
-    
-    if first_valid_file is None:
-        raise ValueError("[ERROR] No valid segmentation files found.")
+    if not files:
+        raise ValueError(f"[ERROR] No .nii.gz files found in: {seg_folder}")
 
-    # Extract reference orientation from first valid segmentation
-    ref_img = nib.load(os.path.join(seg_folder, first_valid_file))
+    # Find first good file for orientation reference
+    ref_img = None
+    for f in files:
+        try:
+            ref_img = nib.load(os.path.join(seg_folder, f))
+            break
+        except Exception as e:
+            print(f"[WARNING] Failed to load {f} as reference: {e}")
+            continue
+
+    if ref_img is None:
+        raise RuntimeError("[ERROR] No readable .nii.gz files found to determine orientation.")
+
     orig_ornt = io_orientation(ref_img.affine)
     target_ornt = axcodes2ornt(target_axcodes)
     transform = ornt_transform(orig_ornt, target_ornt)
 
+    # Now load all valid segmentations
     for file in files:
-        organ = os.path.splitext(os.path.splitext(file)[0])[0]  # Remove .nii.gz
+        organ = os.path.splitext(os.path.splitext(file)[0])[0]
         if organ not in organ_list:
             continue
 
         file_path = os.path.join(seg_folder, file)
-        nii_img = nib.load(file_path)
-        arr = np.asanyarray(nii_img.dataobj).astype(data_type)
-        arr = apply_orientation(arr, transform)
-        segmentation_dict[organ] = arr
+        try:
+            nii_img = nib.load(file_path)
+            arr = np.asanyarray(nii_img.dataobj).astype(data_type)
+
+            # Apply orientation transformation
+            arr = apply_orientation(arr, transform)
+            if arr.ndim != 3:
+                continue
+
+            segmentation_dict[organ] = arr
+
+        except Exception as e:
+            print(f"[WARNING] Skipping {organ} due to read/format error: {e}")
+            continue
 
         del nii_img, arr
-        gc.collect()
+        gc.collect() # free up memory usage
+
+    if not segmentation_dict:
+        raise RuntimeError(f"[ERROR] No valid segmentations found in: {seg_folder}")
 
     return segmentation_dict
 
@@ -630,7 +643,7 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
         if mask is None:
             continue
         mask = mask.astype(bool)
-        
+
         # Save individual mask only if non-empty
         if np.any(mask):
             organ_img = nib.Nifti1Image(mask.astype(np.uint8), affine=reference_img.affine, header=reference_img.header)
@@ -646,9 +659,4 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
     if if_save_combined:
         # Save combined label file (one write)
         combined_img = nib.Nifti1Image(combined, affine=reference_img.affine, header=reference_img.header)
-        nib.save(combined_img, os.path.join(output_folder, combined_filename))
-        del combined_img
-        gc.collect()        
-    
-    del combined
-    gc.collect()
+        nib.save(combined_img, os.path.join(output_folder, combined_filename))       
