@@ -131,6 +131,7 @@ def main(input_path, input_folder_name, output_path=None):
 ############################## Parallel Execution ################################
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError, CancelledError
+from concurrent.futures import wait, FIRST_COMPLETED
 
 def process_case(sub_folder, input_folder, output_folder):
     input_path = os.path.join(input_folder, sub_folder)
@@ -144,23 +145,35 @@ def process_case(sub_folder, input_folder, output_folder):
 
 def run_in_parallel(sub_folders, input_folder, output_folder, max_workers=4):
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(process_case, sub_folder, input_folder, output_folder): sub_folder
-            for sub_folder in sub_folders
-        }
-        print(f"[INFO] Start processing, total case num. {len(futures)}")
-        for future in as_completed(futures):
-            sub_folder = futures[future]
+        active_futures = []
+        print(f"[INFO] Start processing {len(sub_folders)} cases with up to {max_workers} workers.")
+
+        for sub_folder in sub_folders:
+            future = executor.submit(process_case, sub_folder, input_folder, output_folder)
+            active_futures.append((sub_folder, future))
+
+            # If we're at max workers, wait until one finishes
+            if len(active_futures) >= max_workers:
+                done, _ = wait([f for _, f in active_futures], return_when=FIRST_COMPLETED)
+                for sub_folder, f in active_futures:
+                    if f in done:
+                        try:
+                            f.result()
+                            logging.info(f"[ShapeKit] Successfully processed {sub_folder}")
+                        except MemoryError as mem_err:
+                            logging.error(f"MemoryError while processing {sub_folder}: {mem_err}")
+                            print(f"[WARNING] MemoryError in {sub_folder}, skipping.")
+                # Keep only unfinished ones
+                active_futures = [(sf, f) for sf, f in active_futures if not f.done()]
+
+        # Final flush
+        for sub_folder, f in active_futures:
             try:
-                future.result()
+                f.result()
                 logging.info(f"[ShapeKit] Successfully processed {sub_folder}")
             except MemoryError as mem_err:
                 logging.error(f"MemoryError while processing {sub_folder}: {mem_err}")
                 print(f"[WARNING] MemoryError in {sub_folder}, skipping.")
-
-            # except Exception as e:
-            #     logging.error(f"Exception(Not MemError) while processing {sub_folder}: {e}")
-            #     print(f"[WARNING] Error(Not MemError)  in {sub_folder}, skipping.")
 
 
 parser = argparse.ArgumentParser(description="Anatomical-aware post-processing")
