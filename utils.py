@@ -630,15 +630,18 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
         if mask is None:
             continue
         mask = mask.astype(bool)
+        
         # Save individual mask only if non-empty
         if np.any(mask):
             organ_img = nib.Nifti1Image(mask.astype(np.uint8), affine=reference_img.affine, header=reference_img.header)
             nib.save(organ_img, os.path.join(seg_folder, f"{organ}.nii.gz"))
-            del organ_img  # Free memory
-            gc.collect()
 
             # Combine masks: higher index can overwrite previous ones (if needed)
             combined[mask] = index
+
+            del organ_img  # Free memory
+            del mask
+            gc.collect()
 
     if if_save_combined:
         # Save combined label file (one write)
