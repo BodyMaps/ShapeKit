@@ -9,6 +9,9 @@ import multiprocessing
 import time
 from functools import partial
 
+# Import class maps
+from class_maps import available_class_maps
+
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -435,16 +438,28 @@ def fix_lung_overlap(lung_left_seg, lung_right_seg, seg_dir):
     
     return new_left_mask, new_right_mask
 
-def fix_liver_segmentation(case_dir, output_dir=None):
+def fix_liver_segmentation(case_dir, output_dir=None, class_map_name="all"):
     """Fix errors in liver segmentation using other organs as spatial reference
     
     Args:
         case_dir: Path to the case directory
         output_dir: Path to the output directory. If None, saves in a subdirectory of case_dir
+        class_map_name: Name of the class map to use for processing (default: "all")
     
     Returns:
         bool: True if processing is successful, False otherwise
     """
+    # Get the specified class map
+    if class_map_name not in available_class_maps:
+        logging.error(f"Unknown class map: {class_map_name}. Available: {list(available_class_maps.keys())}")
+        return False
+    
+    class_map = available_class_maps[class_map_name]
+    # Create reverse mapping from organ name to class ID
+    PROCESS_ORGAN_MAP = {organ_name: class_id for class_id, organ_name in class_map.items()}
+    
+    logging.info(f"Using class map '{class_map_name}' with {len(PROCESS_ORGAN_MAP)} organs to process")
+    
     # Determine the output directory
     if output_dir is None:
         # Original behavior: save in after_processing subdirectory
@@ -467,12 +482,18 @@ def fix_liver_segmentation(case_dir, output_dir=None):
     # Path definitions
     seg_dir = os.path.join(case_dir, "segmentations")
     
-    # Dynamically build organ maps
+    # Dynamically build organ maps (load ALL organs from segmentations)
     ORGAN_LABEL_MAP, ORGAN_PROCESSING_PARAMS = build_organ_maps(seg_dir)
     
-    # Check if liver exists
+    # Check if liver exists in both maps
     if 'liver' not in ORGAN_LABEL_MAP:
-        logging.error("Missing required organ: liver")
+        logging.error("Missing required organ: liver in segmentations")
+        logging.getLogger().removeHandler(file_handler)
+        file_handler.close()
+        return False
+    
+    if 'liver' not in PROCESS_ORGAN_MAP:
+        logging.error("Missing required organ: liver in class map")
         logging.getLogger().removeHandler(file_handler)
         file_handler.close()
         return False
@@ -502,7 +523,7 @@ def fix_liver_segmentation(case_dir, output_dir=None):
     image_shape = sample_nii.shape
     combined_labels = np.zeros(image_shape, dtype=original_dtype)
     
-    # Load segmentations for each organ and merge into combined_labels
+    # Load segmentations for ALL organs and merge into combined_labels
     for name, label_id in ORGAN_LABEL_MAP.items():
         organ_path = os.path.join(seg_dir, f"{name}.nii.gz")
         if os.path.exists(organ_path):
@@ -517,29 +538,35 @@ def fix_liver_segmentation(case_dir, output_dir=None):
     # Create a copy for further processing
     new_combined_labels = combined_labels.copy()
     
-    # Fix overlap in lung segmentation
-    lung_right_nii = nib.load(os.path.join(seg_dir, "lung_right.nii.gz"))
-    lung_right_seg = lung_right_nii.get_fdata() > 0
+    # Fix overlap in lung segmentation - check if lung files exist
+    lung_left_path = os.path.join(seg_dir, "lung_left.nii.gz")
+    lung_right_path = os.path.join(seg_dir, "lung_right.nii.gz")
     
-    lung_left_seg = nib.load(os.path.join(seg_dir, "lung_left.nii.gz")).get_fdata() > 0
-    lung_right_seg = lung_right_nii.get_fdata() > 0
-    
-    # Fix lung overlap issue
-    fixed_left_lung, fixed_right_lung = fix_lung_overlap(lung_left_seg, lung_right_seg, seg_dir)
-    
-    # Update lung labels - using new_combined_labels
-    if 'lung_left' in ORGAN_LABEL_MAP:
-        new_combined_labels[new_combined_labels == ORGAN_LABEL_MAP['lung_left']] = 0
-        new_combined_labels[fixed_left_lung] = ORGAN_LABEL_MAP['lung_left']
-    
-    if 'lung_right' in ORGAN_LABEL_MAP:
-        new_combined_labels[new_combined_labels == ORGAN_LABEL_MAP['lung_right']] = 0
-        new_combined_labels[fixed_right_lung] = ORGAN_LABEL_MAP['lung_right']
-    
-    
-    # Use corrected lungs to calculate data
-    lung_left_x_indices = np.where(fixed_left_lung)[0]
-    lung_right_x_indices = np.where(fixed_right_lung)[0]
+    if os.path.exists(lung_left_path) and os.path.exists(lung_right_path):
+        lung_left_seg = nib.load(lung_left_path).get_fdata() > 0
+        lung_right_seg = nib.load(lung_right_path).get_fdata() > 0
+        
+        # Fix lung overlap issue
+        fixed_left_lung, fixed_right_lung = fix_lung_overlap(lung_left_seg, lung_right_seg, seg_dir)
+        
+        # Update lung labels - using new_combined_labels
+        if 'lung_left' in ORGAN_LABEL_MAP:
+            new_combined_labels[new_combined_labels == ORGAN_LABEL_MAP['lung_left']] = 0
+            new_combined_labels[fixed_left_lung] = ORGAN_LABEL_MAP['lung_left']
+        
+        if 'lung_right' in ORGAN_LABEL_MAP:
+            new_combined_labels[new_combined_labels == ORGAN_LABEL_MAP['lung_right']] = 0
+            new_combined_labels[fixed_right_lung] = ORGAN_LABEL_MAP['lung_right']
+        
+        # Use corrected lungs to calculate data
+        lung_left_x_indices = np.where(fixed_left_lung)[0]
+        lung_right_x_indices = np.where(fixed_right_lung)[0]
+    else:
+        logging.warning("Lung segmentation files not found, skipping lung overlap correction")
+        fixed_left_lung = np.zeros_like(combined_labels, dtype=bool)
+        fixed_right_lung = np.zeros_like(combined_labels, dtype=bool)
+        lung_left_x_indices = np.array([])
+        lung_right_x_indices = np.array([])
     
     # Calculate total volume of left and right lungs
     lung_total_volume = np.sum(fixed_left_lung) + np.sum(fixed_right_lung)
@@ -576,20 +603,20 @@ def fix_liver_segmentation(case_dir, output_dir=None):
         logging.warning("Bladder segmentation not found, using empty mask")
     
     # Calculate z-axis range of right lung for liver filtering
-    has_lung_right = 'lung_right' in ORGAN_LABEL_MAP and np.any(lung_right_seg)
+    has_lung_right = 'lung_right' in ORGAN_LABEL_MAP and np.any(fixed_right_lung)
     lung_right_center = None
     lung_right_volume = 0
     if has_lung_right:
         # Calculate maximum connected component volume of right lung
-        labeled_lung_right, num_features = ndimage.label(lung_right_seg)
+        labeled_lung_right, num_features = ndimage.label(fixed_right_lung)
         if num_features > 0:
-            lung_right_component_sizes = ndimage.sum(lung_right_seg, labeled_lung_right, range(1, num_features + 1))
+            lung_right_component_sizes = ndimage.sum(fixed_right_lung, labeled_lung_right, range(1, num_features + 1))
             lung_right_volume = np.max(lung_right_component_sizes)
-            lung_right_z_indices = np.where(lung_right_seg)[2]
+            lung_right_z_indices = np.where(fixed_right_lung)[2]
             lung_right_center = (np.min(lung_right_z_indices) + np.max(lung_right_z_indices)) // 2
             logging.info(f"Right lung center position: {lung_right_center}, maximum component volume: {lung_right_volume}")
     else:
-        logging.warning("Right lung segmentation not found, will not apply z-axis constraint to liver")
+        logging.warning("Right lung segmentation not found or empty, will not apply z-axis constraint to liver")
     
     # Get maximum connected component volume and centroid of bladder
     has_bladder = 'bladder' in ORGAN_LABEL_MAP
@@ -694,11 +721,16 @@ def fix_liver_segmentation(case_dir, output_dir=None):
     new_combined_labels[liver_regions] = 0
     new_combined_labels[liver_mask] = liver_label
     
-    # Remove noise from each organ
+    # Remove noise from each organ - BUT ONLY FOR ORGANS IN CLASS MAP
     merge_updates = {}  # Record all regions to be merged
     
     for name, label_id in ORGAN_LABEL_MAP.items():
         if label_id == liver_label:  # Skip already processed liver
+            continue
+        
+        # Only process organs that are in the class map
+        if name not in PROCESS_ORGAN_MAP:
+            logging.info(f"Skipping noise removal for {name} (not in class map)")
             continue
         
         # Get organ-specific parameters
@@ -706,6 +738,7 @@ def fix_liver_segmentation(case_dir, output_dir=None):
         
         organ_mask = (new_combined_labels == label_id)
         if np.any(organ_mask):
+            logging.info(f"Processing noise removal for {name}")
             # Remove small connected components
             cleaned_mask, merge_regions = remove_small_components(
                 organ_mask, 
@@ -741,16 +774,21 @@ def fix_liver_segmentation(case_dir, output_dir=None):
     
     # After noise removal and region merging for each organ is completed
     
-    # Add femur processing
-    if 'femur_left' in ORGAN_LABEL_MAP and 'femur_right' in ORGAN_LABEL_MAP:
+    # Add femur processing - only if both femurs are in class map
+    if ('femur_left' in ORGAN_LABEL_MAP and 'femur_right' in ORGAN_LABEL_MAP and
+        'femur_left' in PROCESS_ORGAN_MAP and 'femur_right' in PROCESS_ORGAN_MAP):
         logging.info("Starting femur processing...")
         new_combined_labels = process_femur(new_combined_labels, bladder_seg, ORGAN_LABEL_MAP)
         logging.info("Femur processing complete")
+    else:
+        logging.info("Skipping femur processing (not in class map or not found)")
 
-    # Special processing for pancreas
-    if 'pancreas' in ORGAN_LABEL_MAP:
+    # Special processing for pancreas - only if in class map
+    if 'pancreas' in ORGAN_LABEL_MAP and 'pancreas' in PROCESS_ORGAN_MAP:
         logging.info("Starting special processing for pancreas...")
         new_combined_labels = process_pancreas(new_combined_labels, ORGAN_LABEL_MAP)
+    else:
+        logging.info("Skipping pancreas processing (not in class map or not found)")
     
     # Save updated combined labels
     corrected_combined_nii = nib.Nifti1Image(new_combined_labels.astype(original_dtype), 
@@ -764,7 +802,7 @@ def fix_liver_segmentation(case_dir, output_dir=None):
     after_seg_dir = os.path.join(after_processing_dir, "segmentations")
     os.makedirs(after_seg_dir, exist_ok=True)
     
-    # Iterate through all organ files in the original segmentations directory
+    # Iterate through ALL organ files in the original segmentations directory (preserve all files)
     for organ_file in os.listdir(seg_dir):
         if not organ_file.endswith('.nii.gz'):
             continue
@@ -773,18 +811,24 @@ def fix_liver_segmentation(case_dir, output_dir=None):
         if organ_name in ORGAN_LABEL_MAP:
             # Extract organ mask from combined_labels
             organ_mask = (new_combined_labels == ORGAN_LABEL_MAP[organ_name])
-            # Save even if empty after processing, as long as it exists in original segmentations
+            # Save all organs (processed and unprocessed)
             organ_nii = nib.Nifti1Image((organ_mask > 0).astype(np.float32), 
                                       combined_labels_nii.affine,
                                       combined_labels_nii.header.copy())
             organ_path = os.path.join(after_seg_dir, organ_file)
             nib.save(organ_nii, organ_path)
-            logging.info(f"Saved organ segmentation: {organ_file}")
+            
+            # Log whether this organ was processed or not
+            if organ_name in PROCESS_ORGAN_MAP:
+                logging.info(f"Saved processed organ segmentation: {organ_file}")
+            else:
+                logging.info(f"Saved unprocessed organ segmentation: {organ_file}")
         else:
             logging.warning(f"Organ {organ_name} not found in label mapping")
     
-    logging.info(f"Processed files have been saved to: {after_processing_dir}")
+    logging.info(f"Processed files have been saved to: {output_dir}")
     logging.info(f"Individual organ segmentation files have been saved to: {after_seg_dir}")
+    logging.info(f"Processed organs using class map '{class_map_name}': {list(PROCESS_ORGAN_MAP.keys())}")
     
     # Remove file handler after processing
     logging.getLogger().removeHandler(file_handler)
@@ -950,12 +994,13 @@ def process_pancreas(combined_labels, ORGAN_LABEL_MAP):
     
     return new_labels
 
-def process_case(case_dir, output_dir):
+def process_case(case_dir, output_dir, class_map_name="all"):
     """Process a single case
     
     Args:
         case_dir: Path to the case directory
-        output_dir: Path to output directory
+        output_dir: Path to output directory (can be None for in-place processing)
+        class_map_name: Name of the class map to use
     
     Returns:
         Tuple of (success, message)
@@ -963,7 +1008,7 @@ def process_case(case_dir, output_dir):
     case_folder = os.path.basename(os.path.normpath(case_dir))
     try:
         start_time = time.time()
-        success = fix_liver_segmentation(case_dir, output_dir)
+        success = fix_liver_segmentation(case_dir, output_dir, class_map_name)
         elapsed_time = time.time() - start_time
         
         if success:
@@ -975,7 +1020,7 @@ def process_case(case_dir, output_dir):
     except Exception as e:
         return (False, f"{case_folder} processing error: {str(e)}")
 
-def process_all_cases(input_dir, output_dir=None, num_processes=None):
+def process_all_cases(input_dir, output_dir=None, num_processes=None, case_list_file=None, class_map_name="all"):
     """Process all cases using multiple CPU cores
     
     Args:
@@ -983,10 +1028,98 @@ def process_all_cases(input_dir, output_dir=None, num_processes=None):
         output_dir: Directory where processed results will be saved. If None,
                    results are saved in subdirectories of each case
         num_processes: Number of processes to use. If None, uses cpu_count()
+        case_list_file: Path to txt file containing case names to process. If None, processes all cases
+        class_map_name: Name of the class map to use for processing
     """
+    # Validate class map
+    if class_map_name not in available_class_maps:
+        logging.error(f"Unknown class map: {class_map_name}. Available: {list(available_class_maps.keys())}")
+        return
+    
+    logging.info(f"Using class map: {class_map_name}")
+    
     # Get all case folders
     case_folders = [f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f))]
-    total_cases = len(case_folders)
+    
+    # Filter and sort BDMAP cases by number
+    bdmap_cases = []
+    for folder in case_folders:
+        # More flexible BDMAP format checking
+        if folder.startswith('BDMAP_'):
+            try:
+                # Extract the number part after 'BDMAP_'
+                number_part = folder.split('_')[1]
+                case_number = int(number_part)
+                bdmap_cases.append((case_number, folder))
+                logging.debug(f"Found BDMAP case: {folder} -> {case_number}")
+            except (ValueError, IndexError):
+                logging.warning(f"Invalid BDMAP case format: {folder}")
+                continue
+    
+    # Sort by case number
+    bdmap_cases.sort(key=lambda x: x[0])
+    
+    # Debug: Show first few cases found
+    if bdmap_cases:
+        logging.info(f"Found {len(bdmap_cases)} total BDMAP cases")
+        sample_cases = [folder for _, folder in bdmap_cases[:5]]
+        logging.info(f"Sample cases (first 5): {sample_cases}")
+    else:
+        logging.error("No BDMAP cases found at all")
+        # Show all folders for debugging
+        logging.info(f"All folders in directory: {case_folders[:10]}")
+        return
+    
+    # Determine target cases based on case_list_file parameter
+    if case_list_file is not None:
+        # Read case names from txt file
+        try:
+            with open(case_list_file, 'r', encoding='utf-8') as f:
+                specified_cases = [line.strip() for line in f if line.strip()]
+            logging.info(f"Read {len(specified_cases)} case names from {case_list_file}")
+            
+            # Filter bdmap_cases to only include those specified in the txt file
+            target_cases = [(num, name) for num, name in bdmap_cases if name in specified_cases]
+            
+            # Check for cases that were specified but not found
+            found_cases = {name for _, name in target_cases}
+            missing_cases = [case for case in specified_cases if case not in found_cases]
+            if missing_cases:
+                logging.warning(f"The following cases from txt file were not found in input directory: {missing_cases}")
+            
+            logging.info(f"Processing {len(target_cases)} cases specified in txt file")
+        except FileNotFoundError:
+            logging.error(f"Case list file not found: {case_list_file}")
+            return
+        except Exception as e:
+            logging.error(f"Error reading case list file {case_list_file}: {str(e)}")
+            return
+    else:
+        # Default: process BDMAP_00000001 to BDMAP_00001000
+        target_cases = [(num, name) for num, name in bdmap_cases if 1 <= num <= 1000]
+        logging.info(f"Processing target range: BDMAP_00000001 to BDMAP_00001000")
+    
+    # Extract sorted case folder names
+    sorted_case_folders = [folder for _, folder in target_cases]
+    total_cases = len(sorted_case_folders)
+    
+    if total_cases == 0:
+        if case_list_file is not None:
+            logging.error("No valid cases found matching the specified case list file")
+        else:
+            logging.error("No valid BDMAP cases found in the input directory for the target range")
+            # List available cases for debugging
+            available_cases = [folder for _, folder in bdmap_cases[:10]]  # Show first 10
+            if available_cases:
+                logging.info(f"Available cases (first 10): {available_cases}")
+                # Show the range of case numbers found
+                case_numbers = [num for num, _ in bdmap_cases]
+                logging.info(f"Case number range found: {min(case_numbers)} to {max(case_numbers)}")
+        return
+    
+    logging.info(f"Found {total_cases} valid cases to process")
+    if sorted_case_folders:
+        logging.info(f"Processing range: {sorted_case_folders[0]} to {sorted_case_folders[-1]}")
     
     # Create output directory if specified
     if output_dir is not None:
@@ -1006,11 +1139,11 @@ def process_all_cases(input_dir, output_dir=None, num_processes=None):
     
     logging.info(f"Starting processing of {total_cases} cases from {input_dir} using {num_processes} processes")
     
-    # Create full case paths
-    case_paths = [os.path.join(input_dir, case_folder) for case_folder in case_folders]
+    # Create full case paths in sorted order
+    case_paths = [os.path.join(input_dir, case_folder) for case_folder in sorted_case_folders]
     
-    # Use partial to fix the output_dir parameter
-    process_func = partial(process_case, output_dir=output_dir)
+    # Use partial to fix the output_dir and class_map_name parameters
+    process_func = partial(process_case, output_dir=output_dir, class_map_name=class_map_name)
     
     # Parallel processing using multiprocessing
     try:
@@ -1049,6 +1182,13 @@ def parse_arguments():
                         help="Output directory where processed results will be saved")
     parser.add_argument("--processes", "-p", type=int, required=False, default=None,
                         help="Number of processes to use (default: number of CPU cores)")
+    parser.add_argument("--case_list", "-c", type=str, required=False, default=None,
+                        help="Path to txt file containing case names to process (one per line). If not specified, processes BDMAP_00000001 to BDMAP_00001000")
+    parser.add_argument("--class_map", "-m", type=str, required=False, default="all",
+                        choices=list(available_class_maps.keys()),
+                        help="Class map to use for processing (default: all)")
+    parser.add_argument("--debug", "-d", action="store_true",
+                        help="Enable debug mode to show detailed folder information")
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -1056,10 +1196,21 @@ if __name__ == "__main__":
     input_dir = args.input
     output_dir = args.output
     num_processes = args.processes
+    case_list_file = args.case_list
+    class_map_name = args.class_map
+    
+    # Set debug logging level if requested
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
     
     logging.info(f"Input directory: {input_dir}")
     logging.info(f"Output directory: {output_dir if output_dir else 'Same as input (in after_processing subdirectories)'}")
     logging.info(f"Number of processes: {num_processes if num_processes else 'Auto (using all available CPU cores)'}")
+    logging.info(f"Class map: {class_map_name}")
+    if case_list_file:
+        logging.info(f"Case list file: {case_list_file}")
+    else:
+        logging.info(f"Target range: BDMAP_00000001 to BDMAP_00001000")
     
-    process_all_cases(input_dir, output_dir, num_processes)
+    process_all_cases(input_dir, output_dir, num_processes, case_list_file, class_map_name)
     logging.info("Post-processing complete")
