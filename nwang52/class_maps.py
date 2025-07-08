@@ -63,8 +63,47 @@ class_map_abdomenatlas_pants = {
     28: 'pancreatic_tumor'
 }
 
+# Complete class map combining all organs from 1.1 and pants (33 unique organs)
+class_map_all = {
+    1: 'adrenal_gland_left',
+    2: 'adrenal_gland_right',
+    3: 'aorta',
+    4: 'bladder',
+    5: 'celiac_artery',
+    6: 'celiac_trunk',
+    7: 'colon',
+    8: 'common_bile_duct',
+    9: 'duodenum',
+    10: 'esophagus',
+    11: 'femur_left',
+    12: 'femur_right',
+    13: 'gall_bladder',
+    14: 'hepatic_vessel',
+    15: 'intestine',
+    16: 'kidney_left',
+    17: 'kidney_right',
+    18: 'liver',
+    19: 'lung_left',
+    20: 'lung_right',
+    21: 'pancreas',
+    22: 'pancreas_body',
+    23: 'pancreas_head',
+    24: 'pancreas_tail',
+    25: 'pancreatic_duct',
+    26: 'pancreatic_tumor',
+    27: 'portal_vein_and_splenic_vein',
+    28: 'postcava',
+    29: 'prostate',
+    30: 'rectum',
+    31: 'spleen',
+    32: 'stomach',
+    33: 'superior_mesenteric_artery',
+    34: 'veins'
+}
+
 # Dictionary of all available class maps
 available_class_maps = {
     "1.1": class_map_abdomenatlas_1_1,
-    "pants": class_map_abdomenatlas_pants
+    "pants": class_map_abdomenatlas_pants,
+    "all": class_map_all
 }
