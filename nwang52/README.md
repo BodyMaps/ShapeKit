@@ -18,7 +18,7 @@ The post-processing tools address several common issues in automated organ segme
 ## Usage
 1. Run the script from the command line with input and output directories:
    ```bash
-   python -W ignore organ_postprocessing.py --input /mnt/bodymaps/mask_only/JuMa/JuMa/ --output /mnt/T9/temp_data_to_delete_very_soon/zzhou82/JuMa_nwang52 --processes 12
+   python organ_postprocessing.py --input /path/to/input_cases --output /path/to/output_dir
    ```
 
 2. Alternatively, you can run without specifying an output directory, which will save results in an `after_processing` subdirectory within each case directory:
