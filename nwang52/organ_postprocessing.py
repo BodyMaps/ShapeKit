@@ -55,7 +55,6 @@ def build_organ_maps(seg_dir):
 def remove_small_components(organ_mask, combined_labels=None, current_label=None, min_size_ratio=0.05, min_merge_ratio=0.05, ORGAN_LABEL_MAP=None):
     """
     Remove small connected components in organ segmentation, merge larger noise regions
-    Apply fragmentation filter for organs with too many components
 
     Args:
         organ_mask: Binary mask of the organ
@@ -72,38 +71,6 @@ def remove_small_components(organ_mask, combined_labels=None, current_label=None
     if num_features <= 1:
         return organ_mask, {}
 
-    # Get organ name for logging
-    organ_name = next((name for name, id in ORGAN_LABEL_MAP.items() if id == current_label), f"Unknown-{current_label}") if ORGAN_LABEL_MAP and current_label else "Unknown"
-    
-    # Apply fragmentation filter if too many components
-    if num_features > 50:
-        logging.warning(f"{organ_name} has {num_features} connected components, applying fragmentation filter")
-        
-        # Calculate sizes of all components
-        component_sizes = ndimage.sum(organ_mask, labeled_organ, range(1, num_features + 1))
-        
-        # Get indices of the 20 largest components
-        largest_component_indices = np.argsort(component_sizes)[-20:]  # Get indices of 20 largest
-        largest_component_labels = largest_component_indices + 1  # Convert to 1-based labeling
-        
-        # Create filtered mask with only the 20 largest components
-        filtered_mask = np.zeros_like(organ_mask)
-        for label in largest_component_labels:
-            component_mask = (labeled_organ == label)
-            filtered_mask |= component_mask
-        
-        # Log filtering results
-        kept_sizes = component_sizes[largest_component_indices]
-        total_original_volume = np.sum(component_sizes)
-        total_kept_volume = np.sum(kept_sizes)
-        
-        logging.info(f"{organ_name} fragmentation filter applied:")
-        logging.info(f"  Kept 20 largest components out of {num_features}")
-        logging.info(f"  Kept volume: {total_kept_volume}/{total_original_volume} ({total_kept_volume/total_original_volume*100:.1f}%)")
-        
-        return filtered_mask, {}  # No merging for highly fragmented organs
-    
-    # Normal processing for organs with reasonable number of components
     # Calculate the size of each connected component
     component_sizes = ndimage.sum(organ_mask, labeled_organ, range(1, num_features + 1))
     max_size = np.max(component_sizes)
@@ -151,11 +118,13 @@ def remove_small_components(organ_mask, combined_labels=None, current_label=None
                     merge_regions[int(target_label)].append(component)
 
                     # Get current and target organ names
+                    current_organ = next((name for name, id in ORGAN_LABEL_MAP.items() if id == current_label), f"Unknown-{current_label}") if ORGAN_LABEL_MAP and current_label else "Unknown"
                     target_organ = next((name for name, id in ORGAN_LABEL_MAP.items() if id == target_label), f"Unknown-{target_label}")
-                    logging.info(f"Merging connected component of {organ_name} with volume {size} into {target_organ}")
+                    logging.info(f"Merging connected component of {current_organ} with volume {size} into {target_organ}")
             else:
                 # If volume < min_merge_size, remove directly
-                logging.info(f"Removing connected component of {organ_name} with volume {size} (below threshold {size_threshold} and {min_merge_size})")
+                current_organ = next((name for name, id in ORGAN_LABEL_MAP.items() if id == current_label), f"Unknown-{current_label}") if ORGAN_LABEL_MAP and current_label else "Unknown"
+                logging.info(f"Removing connected component of {current_organ} with volume {size} (below threshold {size_threshold} and {min_merge_size})")
 
     return cleaned_mask, merge_regions
 
