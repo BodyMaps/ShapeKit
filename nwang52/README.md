@@ -55,19 +55,6 @@ python organ_postprocessing.py --input /path/to/cases --output /path/to/output -
 
 **Parallel Processing:** When `--processes` is NOT specified, automatically uses ALL available CPU cores for maximum performance.
 
-### Step 3: Merge Individual Segmentations (Optional)
-```bash
-# Create combined multi-label images
-python merge_labels.py --input_dir /path/to/output --class_map all
-
-# List available class maps
-python merge_labels.py --list_maps
-```
-
-**Key Parameters:**
-- `--input_dir`, `-i`: Directory containing processed case folders (required)
-- `--class_map`, `-c`: Class mapping to use (choices: '1.1', 'pants', 'all', required)
-
 ## Complete Workflow Examples
 
 ### Example 1: Process Missing Cases Only
@@ -77,18 +64,12 @@ python generate_missing_cases.py -i /data/raw_cases -o missing.txt
 
 # Step 2: Process only missing cases with controlled parallelization
 python organ_postprocessing.py -i /data/raw_cases -c missing.txt -o /data/processed --processes 8
-
-# Step 3: Create combined labels
-python merge_labels.py -i /data/processed --class_map all
 ```
 
 ### Example 2: Full Dataset Processing
 ```bash
-# Step 1: Process all cases found in input directory with maximum performance
+# Process all cases found in input directory with maximum performance
 python organ_postprocessing.py -i /data/cases -o /data/output
-
-# Step 2: Merge labels
-python merge_labels.py -i /data/output --class_map all
 ```
 
 ### Example 3: Targeted Processing with Custom Range
@@ -98,9 +79,6 @@ python generate_missing_cases.py -i /data/cases -o range_500_600.txt --start 500
 
 # Step 2: Process with specific class map and conservative parallelization
 python organ_postprocessing.py -i /data/cases -c range_500_600.txt -o /data/output --class_map 1.1 --processes 6
-
-# Step 3: Merge with matching class map
-python merge_labels.py -i /data/output --class_map 1.1
 ```
 
 ## Input/Output Structure
@@ -161,10 +139,32 @@ input/BDMAP_00000001/
 - Individual case logs: `postprocessing.log` in each case directory
 - Summary logs: `postprocessing_summary.log` in output root directory
 
-## 3. merge_labels.py
+## Additional Tool: merge_labels.py
 
 ### Purpose
 Merges individual organ segmentation files into single multi-label images for easier visualization and analysis.
+
+### Usage
+```bash
+# List available class maps
+python merge_labels.py --list_maps
+
+# Create combined multi-label images
+python merge_labels.py --input_dir /path/to/output --class_map all
+
+# Use specific class map
+python merge_labels.py --input_dir /path/to/output --class_map 1.1
+```
+
+### Key Parameters
+- `--input_dir`, `-i`: Directory containing processed case folders (required)
+- `--class_map`, `-c`: Class mapping to use (choices: '1.1', 'pants', 'all', required)
+- `--list_maps`, `-l`: List available class maps and exit
+
+### Output
+For each case, generates:
+- `combined_labels.nii.gz`: Multi-label 3D volume
+- `label_mapping.json`: JSON file mapping label IDs to organ names
 
 ### Usage
 ```bash
