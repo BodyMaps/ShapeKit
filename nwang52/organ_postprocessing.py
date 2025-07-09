@@ -1084,7 +1084,7 @@ def process_all_cases(input_dir, output_dir=None, num_processes=None, case_list_
         output_dir: Directory where processed results will be saved. If None,
                    results are saved in subdirectories of each case
         num_processes: Number of processes to use. If None, uses cpu_count()
-        case_list_file: Path to txt file containing case names to process. If None, processes all cases
+        case_list_file: Path to txt file containing case names to process. If None, processes all BDMAP cases found
         class_map_name: Name of the class map to use for processing
     """
     # Validate class map
@@ -1151,9 +1151,9 @@ def process_all_cases(input_dir, output_dir=None, num_processes=None, case_list_
             logging.error(f"Error reading case list file {case_list_file}: {str(e)}")
             return
     else:
-        # Default: process BDMAP_00000001 to BDMAP_00001000
-        target_cases = [(num, name) for num, name in bdmap_cases if 1 <= num <= 1000]
-        logging.info(f"Processing target range: BDMAP_00000001 to BDMAP_00001000")
+        # Default: process ALL BDMAP cases found in the input directory
+        target_cases = bdmap_cases
+        logging.info(f"Processing all BDMAP cases found in input directory")
     
     # Extract sorted case folder names
     sorted_case_folders = [folder for _, folder in target_cases]
@@ -1163,14 +1163,7 @@ def process_all_cases(input_dir, output_dir=None, num_processes=None, case_list_
         if case_list_file is not None:
             logging.error("No valid cases found matching the specified case list file")
         else:
-            logging.error("No valid BDMAP cases found in the input directory for the target range")
-            # List available cases for debugging
-            available_cases = [folder for _, folder in bdmap_cases[:10]]  # Show first 10
-            if available_cases:
-                logging.info(f"Available cases (first 10): {available_cases}")
-                # Show the range of case numbers found
-                case_numbers = [num for num, _ in bdmap_cases]
-                logging.info(f"Case number range found: {min(case_numbers)} to {max(case_numbers)}")
+            logging.error("No valid BDMAP cases found in the input directory")
         return
     
     logging.info(f"Found {total_cases} valid cases to process")
@@ -1239,7 +1232,7 @@ def parse_arguments():
     parser.add_argument("--processes", "-p", type=int, required=False, default=None,
                         help="Number of processes to use (default: number of CPU cores)")
     parser.add_argument("--case_list", "-c", type=str, required=False, default=None,
-                        help="Path to txt file containing case names to process (one per line). If not specified, processes BDMAP_00000001 to BDMAP_00001000")
+                        help="Path to txt file containing case names to process (one per line). If not specified, processes all BDMAP cases found in input directory")
     parser.add_argument("--class_map", "-m", type=str, required=False, default="all",
                         choices=list(available_class_maps.keys()),
                         help="Class map to use for processing (default: all)")
@@ -1263,6 +1256,13 @@ if __name__ == "__main__":
     logging.info(f"Output directory: {output_dir if output_dir else 'Same as input (in after_processing subdirectories)'}")
     logging.info(f"Number of processes: {num_processes if num_processes else 'Auto (using all available CPU cores)'}")
     logging.info(f"Class map: {class_map_name}")
+    if case_list_file:
+        logging.info(f"Case list file: {case_list_file}")
+    else:
+        logging.info(f"Target: All BDMAP cases found in input directory")
+    
+    process_all_cases(input_dir, output_dir, num_processes, case_list_file, class_map_name)
+    logging.info("Post-processing complete")
     if case_list_file:
         logging.info(f"Case list file: {case_list_file}")
     else:
