@@ -17,8 +17,6 @@ The pipeline consists of three main tools that work together to provide a comple
 # Generate list of missing cases for processing
 python generate_missing_cases.py --input /path/to/cases --output missing_cases.txt
 
-# Or generate list of existing cases
-python generate_missing_cases.py --input /path/to/cases --output existing_cases.txt --mode existing
 ```
 
 ### Step 2: Run Post-Processing
