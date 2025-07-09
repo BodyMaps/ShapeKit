@@ -4,12 +4,11 @@ This repository contains a comprehensive post-processing pipeline for medical im
 
 ## Overview
 
-The pipeline consists of four main tools that work together to provide a complete post-processing workflow:
+The pipeline consists of three main tools that work together to provide a complete post-processing workflow:
 
 1. **`generate_missing_cases.py`** - Case list management and missing case detection
 2. **`organ_postprocessing.py`** - Core post-processing algorithm for organ segmentations
 3. **`merge_labels.py`** - Merge individual organ files into combined multi-label images
-4. **`cleanup_incomplete_cases.py`** - Clean up incomplete or failed processing results
 
 ## Quick Start Workflow
 
@@ -27,20 +26,35 @@ python generate_missing_cases.py --input /path/to/cases --output existing_cases.
 # Process specific cases from list
 python organ_postprocessing.py --input /path/to/cases --case_list missing_cases.txt --output /path/to/output
 
-# Or process all cases in default range (BDMAP_00000001 to BDMAP_00001000)
+# Or process all BDMAP cases found in input directory (default behavior)
 python organ_postprocessing.py --input /path/to/cases --output /path/to/output
+
+# Control parallel processing with custom number of CPU cores
+python organ_postprocessing.py --input /path/to/cases --output /path/to/output --processes 8
+```
+
+**Parallel Processing Control:**
+The `--processes` parameter controls how many CPU cores are used for parallel processing:
+- **Default behavior (recommended)**: When `--processes` is NOT specified, automatically uses ALL available CPU cores
+- **Custom value**: `--processes 8` uses exactly 8 CPU cores
+- **Single core**: `--processes 1` disables parallel processing
+- **Memory management**: Reduce the number if you encounter memory issues
+- **Performance tip**: For large datasets, using fewer cores (e.g., 75% of total cores) often provides better stability
+
+**Default CPU Detection:**
+```bash
+# These commands are equivalent - both use ALL available CPU cores
+python organ_postprocessing.py --input /path/to/cases --output /path/to/output
+python organ_postprocessing.py --input /path/to/cases --output /path/to/output --processes $(nproc)  # Linux
+python organ_postprocessing.py --input /path/to/cases --output /path/to/output --processes %NUMBER_OF_PROCESSORS%  # Windows
+
+# The tool automatically detects your system's CPU count using multiprocessing.cpu_count()
 ```
 
 ### Step 3: Merge Individual Segmentations (Optional)
 ```bash
 # Create combined multi-label images
 python merge_labels.py --input_dir /path/to/output --class_map all
-```
-
-### Step 4: Clean Up Incomplete Results (Optional)
-```bash
-# Remove folders without combined_labels.nii.gz
-python cleanup_incomplete_cases.py --input /path/to/output --dry-run
 ```
 
 ## Detailed Tool Documentation
@@ -91,7 +105,7 @@ BDMAP_00000012
 
 ### Purpose
 Core post-processing tool that corrects common segmentation issues including:
-- Liver segmentation anatomical filtering
+- Liver segmentation anatomical filtering with fragmentation control
 - Lung overlap resolution
 - Femur left/right classification
 - Prostate region filtering
@@ -110,6 +124,40 @@ python organ_postprocessing.py [OPTIONS]
 - `--case_list`, `-c`: Path to txt file with specific cases to process (optional)
 - `--class_map`, `-m`: Class map for processing scope (choices: '1.1', 'pants', 'all', default: 'all')
 - `--debug`, `-d`: Enable debug output
+
+**Default Processing Behavior:**
+When `--case_list` is NOT specified, the tool automatically processes ALL BDMAP cases found in the input directory. This includes any folder that starts with 'BDMAP_' and contains a valid case number.
+
+### Parallel Processing with `--processes`
+
+The `--processes` parameter is crucial for performance optimization:
+
+**Automatic Detection (Default)**:
+- When `--processes` parameter is **NOT provided**, the tool automatically detects and uses ALL available CPU cores
+- CPU count is determined using Python's `multiprocessing.cpu_count()` function
+- This provides maximum processing speed on dedicated machines
+- **Example**: On a 16-core machine, omitting `--processes` will use all 16 cores
+
+**Manual Configuration**:
+```bash
+# Use specific number of cores (overrides automatic detection)
+python organ_postprocessing.py --input /data/cases --processes 4
+
+# Use single core (disable parallelization completely)
+python organ_postprocessing.py --input /data/cases --processes 1
+
+# Use 75% of available cores (recommended for shared systems)
+python organ_postprocessing.py --input /data/cases --processes 12  # if you have 16 cores
+```
+
+**CPU Detection Details**:
+- The tool uses `multiprocessing.cpu_count()` to detect total CPU cores
+- This includes both physical cores and logical cores (hyperthreading)
+- The detected count is automatically limited by the number of cases to process
+- **System examples**:
+  - Intel i7-8700K (6 cores, 12 threads) → detects 12 cores
+  - AMD Ryzen 9 5900X (12 cores, 24 threads) → detects 24 cores
+  - Server with dual Xeon processors → detects total logical cores
 
 ### Class Maps
 The tool supports three class maps that determine which organs are processed:
@@ -137,6 +185,11 @@ PANTS dataset mapping with detailed pancreatic structures:
 ### Processing Parameters
 The algorithm uses these key parameters:
 
+#### Liver Fragmentation Control
+- **Fragmentation threshold**: 50 connected components
+- **Maximum components kept**: 20 largest components when fragmentation > 50
+- **Volume preservation**: Detailed logging of kept vs. removed volume
+
 #### Small Component Removal
 - `min_size_ratio`: 0.25 (25% of largest component)
 - `min_merge_ratio`: 0.075 (7.5% threshold for merging)
@@ -149,20 +202,20 @@ The algorithm uses these key parameters:
 
 ### Examples
 ```bash
-# Basic processing with case list
-python organ_postprocessing.py -i /data/cases -c missing.txt -o /data/output
+# Basic processing with case list and parallel control
+python organ_postprocessing.py -i /data/cases -c missing.txt -o /data/output -p 8
 
-# Use specific class map
-python organ_postprocessing.py -i /data/cases --class_map 1.1 -o /data/output
+# Use specific class map with optimized parallelization
+python organ_postprocessing.py -i /data/cases --class_map 1.1 -o /data/output --processes 6
 
-# Parallel processing with 8 cores
-python organ_postprocessing.py -i /data/cases -p 8 -o /data/output
+# Debug mode with single core for troubleshooting
+python organ_postprocessing.py -i /data/cases -c test.txt --debug --processes 1
 
-# Process all cases in default range
-python organ_postprocessing.py -i /data/cases -o /data/output
+# Maximum performance on dedicated server (processes ALL cases found)
+python organ_postprocessing.py -i /data/cases -o /data/output  # No --case_list = all BDMAP cases
 
-# Debug mode
-python organ_postprocessing.py -i /data/cases -c test.txt --debug
+# Conservative approach for shared systems
+python organ_postprocessing.py -i /data/cases -o /data/output --processes $(($(nproc) * 3 / 4))  # Linux: 75% of cores
 ```
 
 ### Input Structure
@@ -224,43 +277,6 @@ For each case, generates:
 - `combined_labels.nii.gz`: Multi-label 3D volume
 - `label_mapping.json`: JSON file mapping label IDs to organ names
 
-## 4. cleanup_incomplete_cases.py
-
-### Purpose
-Identifies and removes case folders that failed processing or are missing required output files.
-
-### Usage
-```bash
-python cleanup_incomplete_cases.py [OPTIONS]
-```
-
-### Arguments
-- `--input`, `-i`: Directory containing case folders to check (required)
-- `--dry-run`, `-d`: Show what would be deleted without actually deleting
-- `--list-only`, `-l`: Only list incomplete cases without deletion
-- `--verbose`, `-v`: Enable verbose logging
-
-### Examples
-```bash
-# Check what would be deleted (safe)
-python cleanup_incomplete_cases.py -i /data/output --dry-run
-
-# List incomplete cases only
-python cleanup_incomplete_cases.py -i /data/output --list-only
-
-# Actually delete incomplete cases (WARNING: permanent deletion)
-python cleanup_incomplete_cases.py -i /data/output
-
-# Verbose mode
-python cleanup_incomplete_cases.py -i /data/output --list-only --verbose
-```
-
-### Features
-- **Safe Mode**: Use `--dry-run` to preview changes without deletion
-- **List Mode**: Use `--list-only` to only view incomplete cases
-- **Detection Criteria**: Identifies cases missing `combined_labels.nii.gz` files
-- **Batch Operations**: Processes all BDMAP cases in the directory
-
 ## Complete Workflow Examples
 
 ### Example 1: Process Missing Cases Only
@@ -268,26 +284,20 @@ python cleanup_incomplete_cases.py -i /data/output --list-only --verbose
 # Step 1: Find missing cases
 python generate_missing_cases.py -i /data/raw_cases -o missing.txt
 
-# Step 2: Process only missing cases
-python organ_postprocessing.py -i /data/raw_cases -c missing.txt -o /data/processed
+# Step 2: Process only missing cases with controlled parallelization
+python organ_postprocessing.py -i /data/raw_cases -c missing.txt -o /data/processed --processes 8
 
 # Step 3: Create combined labels
 python merge_labels.py -i /data/processed --class_map all
-
-# Step 4: Clean up any failures
-python cleanup_incomplete_cases.py -i /data/processed --dry-run
 ```
 
 ### Example 2: Full Dataset Processing
 ```bash
-# Step 1: Process all cases in range
+# Step 1: Process all cases found in input directory with maximum performance
 python organ_postprocessing.py -i /data/cases -o /data/output --processes 16
 
 # Step 2: Merge labels
 python merge_labels.py -i /data/output --class_map all
-
-# Step 3: Clean up failures
-python cleanup_incomplete_cases.py -i /data/output --list-only
 ```
 
 ### Example 3: Targeted Processing with Custom Range
@@ -295,8 +305,8 @@ python cleanup_incomplete_cases.py -i /data/output --list-only
 # Step 1: Generate specific range
 python generate_missing_cases.py -i /data/cases -o range_500_600.txt --start 500 --end 600
 
-# Step 2: Process with specific class map
-python organ_postprocessing.py -i /data/cases -c range_500_600.txt -o /data/output --class_map 1.1
+# Step 2: Process with specific class map and conservative parallelization
+python organ_postprocessing.py -i /data/cases -c range_500_600.txt -o /data/output --class_map 1.1 --processes 6
 
 # Step 3: Merge with matching class map
 python merge_labels.py -i /data/output --class_map 1.1
@@ -345,13 +355,20 @@ Processing logs are recorded in:
 2. **Processing failures**: Check individual case logs in `postprocessing.log` files
 3. **Memory issues**: Reduce number of parallel processes with `-p` parameter
 4. **Missing organs**: Use `--debug` flag to see which organs are skipped
+5. **Liver fragmentation warnings**: Normal for cases with >50 connected components; only largest 20 are kept
+
+**Default Processing:**
+- When no `--case_list` is specified, ALL BDMAP cases in the input directory are processed
+- Cases are automatically discovered and sorted by case number
+- Use `--debug` flag to see which cases are found and will be processed
 
 ### Performance Optimization
 
-- Use `--processes` parameter to control CPU usage
-- Process in batches using custom case lists
-- Use appropriate class maps to avoid processing unnecessary organs
-- Monitor disk space as output can be substantial
+- **Parallel processing**: Use `--processes` parameter to control CPU usage
+- **Batch processing**: Process in batches using custom case lists
+- **Class map selection**: Use appropriate class maps to avoid processing unnecessary organs
+- **Storage considerations**: Monitor disk space as output can be substantial
+- **Memory management**: Reduce parallel processes if experiencing memory pressure
 
 ### File Permissions
 
@@ -364,22 +381,25 @@ Ensure write permissions for:
 
 ### Processing Algorithm Overview
 1. **Dynamic organ discovery**: Scans segmentation files to build organ maps
-2. **Anatomical filtering**: Uses spatial relationships between organs for validation
-3. **Connected component analysis**: Identifies and processes individual regions
-4. **Noise removal**: Removes small components and merges larger noise regions
-5. **Special organ processing**: Custom algorithms for lung, femur, pancreas, prostate
+2. **Liver fragmentation control**: Keeps only 20 largest components when >50 components detected
+3. **Anatomical filtering**: Uses spatial relationships between organs for validation
+4. **Connected component analysis**: Identifies and processes individual regions
+5. **Noise removal**: Removes small components and merges larger noise regions
+6. **Special organ processing**: Custom algorithms for lung, femur, pancreas, prostate
 
 ### Adaptive Processing
 - Automatically adapts to available organs in dataset
 - Missing organs are skipped without errors
 - Preserves unprocessed organs in output
 - Flexible class map system for different datasets
+- Intelligent fragmentation handling for severely fragmented organs
 
 ### Logging and Monitoring
 - Individual case logs: `postprocessing.log` in each case directory
 - Summary logs: `postprocessing_summary.log` in output root
 - Debug mode available for detailed troubleshooting
 - Progress tracking for large batch processing
+- Fragmentation statistics and volume preservation reporting
 
 ## Class Maps
 
