@@ -17,7 +17,20 @@ The pipeline consists of three main tools that work together to provide a comple
 # Generate list of missing cases for processing
 python generate_missing_cases.py --input /path/to/cases --output missing_cases.txt
 
+# Or generate list of existing cases
+python generate_missing_cases.py --input /path/to/cases --output existing_cases.txt --mode existing
+
+# Find missing cases in custom range
+python generate_missing_cases.py --input /path/to/cases --output missing_100_500.txt --start 100 --end 500
 ```
+
+**Key Parameters:**
+- `--input`, `-i`: Input directory containing BDMAP case folders (required)
+- `--output`, `-o`: Output txt file path for the cases list (required)
+- `--mode`, `-m`: Generate 'missing' or 'existing' cases list (default: missing)
+- `--start`, `-s`: Starting case number for range (default: 1)
+- `--end`, `-e`: Ending case number for range (default: 1000)
+- `--debug`, `-d`: Enable debug output
 
 ### Step 2: Run Post-Processing
 ```bash
@@ -31,121 +44,122 @@ python organ_postprocessing.py --input /path/to/cases --output /path/to/output
 python organ_postprocessing.py --input /path/to/cases --output /path/to/output --processes 8
 ```
 
-**Parallel Processing Control:**
-The `--processes` parameter controls how many CPU cores are used for parallel processing:
-- **Default behavior (recommended)**: When `--processes` is NOT specified, automatically uses ALL available CPU cores
-- **Custom value**: `--processes 8` uses exactly 8 CPU cores
+**Key Parameters:**
+- `--input`, `-i`: Input directory containing case folders (required)
+- `--output`, `-o`: Output directory for processed results (optional)
+- `--processes`, `-p`: Number of parallel processes (default: all CPU cores automatically detected)
+- `--case_list`, `-c`: Path to txt file with specific cases to process (optional)
+- `--class_map`, `-m`: Class map for processing scope (choices: '1.1', 'pants', 'all', default: 'all')
 
+**Default Processing:** When `--case_list` is NOT specified, processes ALL BDMAP cases found in the input directory.
+
+**Parallel Processing:** When `--processes` is NOT specified, automatically uses ALL available CPU cores for maximum performance.
 
 ### Step 3: Merge Individual Segmentations (Optional)
 ```bash
 # Create combined multi-label images
 python merge_labels.py --input_dir /path/to/output --class_map all
+
+# List available class maps
+python merge_labels.py --list_maps
 ```
 
-## Detailed Tool Documentation
+**Key Parameters:**
+- `--input_dir`, `-i`: Directory containing processed case folders (required)
+- `--class_map`, `-c`: Class mapping to use (choices: '1.1', 'pants', 'all', required)
 
-## 1. generate_missing_cases.py
+## Complete Workflow Examples
 
-### Purpose
-Analyzes your dataset to identify missing cases and generates targeted processing lists.
-
-### Usage
+### Example 1: Process Missing Cases Only
 ```bash
-python generate_missing_cases.py [OPTIONS]
+# Step 1: Find missing cases
+python generate_missing_cases.py -i /data/raw_cases -o missing.txt
+
+# Step 2: Process only missing cases with controlled parallelization
+python organ_postprocessing.py -i /data/raw_cases -c missing.txt -o /data/processed --processes 8
+
+# Step 3: Create combined labels
+python merge_labels.py -i /data/processed --class_map all
 ```
 
-### Arguments
-- `--input`, `-i`: Input directory containing BDMAP case folders (required)
-- `--output`, `-o`: Output txt file path for the cases list (required)
-- `--mode`, `-m`: Generate 'missing' or 'existing' cases list (default: missing)
-- `--start`, `-s`: Starting case number for range (default: 1)
-- `--end`, `-e`: Ending case number for range (default: 1000)
-- `--debug`, `-d`: Enable debug output
-
-### Examples
+### Example 2: Full Dataset Processing
 ```bash
-# Find missing cases in default range (1-1000)
-python generate_missing_cases.py -i /data/cases -o missing.txt
+# Step 1: Process all cases found in input directory with maximum performance
+python organ_postprocessing.py -i /data/cases -o /data/output
 
-# Find missing cases in custom range
-python generate_missing_cases.py -i /data/cases -o missing_100_500.txt --start 100 --end 500
-
-# List all existing cases
-python generate_missing_cases.py -i /data/cases -o existing.txt --mode existing
-
-# Enable debug mode
-python generate_missing_cases.py -i /data/cases -o missing.txt --debug
+# Step 2: Merge labels
+python merge_labels.py -i /data/output --class_map all
 ```
 
-### Output Format
-The generated txt file contains one case name per line:
-```
-BDMAP_00000001
-BDMAP_00000005
-BDMAP_00000012
-...
-```
-
-## 2. organ_postprocessing.py
-
-### Purpose
-Core post-processing tool that corrects common segmentation issues including:
-- Liver segmentation anatomical filtering with fragmentation control
-- Lung overlap resolution
-- Femur left/right classification
-- Prostate region filtering
-- Pancreas oversegmentation correction
-- Small component noise removal
-
-### Usage
+### Example 3: Targeted Processing with Custom Range
 ```bash
-python organ_postprocessing.py [OPTIONS]
+# Step 1: Generate specific range
+python generate_missing_cases.py -i /data/cases -o range_500_600.txt --start 500 --end 600
+
+# Step 2: Process with specific class map and conservative parallelization
+python organ_postprocessing.py -i /data/cases -c range_500_600.txt -o /data/output --class_map 1.1 --processes 6
+
+# Step 3: Merge with matching class map
+python merge_labels.py -i /data/output --class_map 1.1
 ```
 
-### Arguments
-- `--input`, `-i`: Input directory containing case folders (required)
-- `--output`, `-o`: Output directory for processed results (optional)
-- `--processes`, `-p`: Number of parallel processes (default: all CPU cores)
-- `--case_list`, `-c`: Path to txt file with specific cases to process (optional)
-- `--class_map`, `-m`: Class map for processing scope (choices: '1.1', 'pants', 'all', default: 'all')
-- `--debug`, `-d`: Enable debug output
+## Input/Output Structure
 
-**Default Processing Behavior:**
-When `--case_list` is NOT specified, the tool automatically processes ALL BDMAP cases found in the input directory. This includes any folder that starts with 'BDMAP_' and contains a valid case number.
-
-### Parallel Processing with `--processes`
-
-The `--processes` parameter is crucial for performance optimization:
-
-**Automatic Detection (Default)**:
-- When `--processes` parameter is **NOT provided**, the tool automatically detects and uses ALL available CPU cores
-- CPU count is determined using Python's `multiprocessing.cpu_count()` function
-- This provides maximum processing speed on dedicated machines
-- **Example**: On a 16-core machine, omitting `--processes` will use all 16 cores
-
-**Manual Configuration**:
-```bash
-# Use specific number of cores (overrides automatic detection)
-python organ_postprocessing.py --input /data/cases --processes 4
-
-# Use single core (disable parallelization completely)
-python organ_postprocessing.py --input /data/cases --processes 1
-
-# Use 75% of available cores (recommended for shared systems)
-python organ_postprocessing.py --input /data/cases --processes 12  # if you have 16 cores
+### Expected Input Structure
+```
+input/BDMAP_00000001/
+├── segmentations/
+│   ├── liver.nii.gz
+│   ├── lung_left.nii.gz
+│   ├── lung_right.nii.gz
+│   ├── kidney_left.nii.gz
+│   └── ...other organs.nii.gz
 ```
 
-**CPU Detection Details**:
-- The tool uses `multiprocessing.cpu_count()` to detect total CPU cores
-- This includes both physical cores and logical cores (hyperthreading)
-- The detected count is automatically limited by the number of cases to process
-- **System examples**:
-  - Intel i7-8700K (6 cores, 12 threads) → detects 12 cores
-  - AMD Ryzen 9 5900X (12 cores, 24 threads) → detects 24 cores
-  - Server with dual Xeon processors → detects total logical cores
+### Generated Output Structure (with --output parameter)
+```
+output/BDMAP_00000001/
+├── combined_labels.nii.gz
+├── postprocessing.log
+└── segmentations/
+    ├── liver.nii.gz (processed)
+    ├── lung_left.nii.gz (processed)
+    ├── lung_right.nii.gz (processed)
+    └── ...other organs.nii.gz
+```
+
+### Generated Output Structure (without --output parameter)
+```
+input/BDMAP_00000001/
+├── segmentations/ (original)
+│   ├── liver.nii.gz
+│   └── ...
+└── after_processing/
+    ├── combined_labels.nii.gz
+    ├── postprocessing.log
+    └── segmentations/
+        ├── liver.nii.gz (processed)
+        └── ...other organs.nii.gz
+```
+
+## Core Features
+
+### Post-Processing Corrections
+- **Liver segmentation**: Anatomical filtering with fragmentation control (keeps only 20 largest components when >50 components detected)
+- **Lung overlap resolution**: Fixes conflicts between left and right lung segmentations
+- **Femur left/right classification**: Ensures proper labeling based on anatomical position
+- **Prostate region filtering**: Identifies correct prostate region
+- **Pancreas oversegmentation correction**: Merges excessive connected components
+- **Small component noise removal**: Removes artifacts and small disconnected regions
 
 ### Class Maps
+- **"all" (Default)**: 34 organs - comprehensive mapping from AbdomenAtlas 1.1 and PANTS
+- **"1.1"**: 25 organs - standard AbdomenAtlas 1.1 mapping
+- **"pants"**: 28 organs - PANTS dataset with detailed pancreatic structures
+
+### Processing Logs
+- Individual case logs: `postprocessing.log` in each case directory
+- Summary logs: `postprocessing_summary.log` in output root directory
 The tool supports three class maps that determine which organs are processed:
 
 #### "all" (Default) - 34 organs
