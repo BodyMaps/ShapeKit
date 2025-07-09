@@ -35,9 +35,6 @@ python organ_postprocessing.py --input /path/to/cases --output /path/to/output -
 The `--processes` parameter controls how many CPU cores are used for parallel processing:
 - **Default behavior (recommended)**: When `--processes` is NOT specified, automatically uses ALL available CPU cores
 - **Custom value**: `--processes 8` uses exactly 8 CPU cores
-- **Single core**: `--processes 1` disables parallel processing
-- **Memory management**: Reduce the number if you encounter memory issues
-- **Performance tip**: For large datasets, using fewer cores (e.g., 75% of total cores) often provides better stability
 
 **Default CPU Detection:**
 ```bash
