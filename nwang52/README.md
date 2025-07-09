@@ -160,14 +160,6 @@ For each case, generates:
 - `combined_labels.nii.gz`: Multi-label 3D volume
 - `label_mapping.json`: JSON file mapping label IDs to organ names
 
-
-### Arguments
-- `--input_dir`, `-i`: Directory containing processed case folders (required)
-- `--class_map`, `-c`: Class mapping to use (choices: '1.1', 'pants', 'all', required)
-- `--list_maps`, `-l`: List available class maps and exit
-
-
-
 ## Technical Details
 
 ### Processing Algorithm Overview
