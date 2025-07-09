@@ -36,15 +36,6 @@ The `--processes` parameter controls how many CPU cores are used for parallel pr
 - **Default behavior (recommended)**: When `--processes` is NOT specified, automatically uses ALL available CPU cores
 - **Custom value**: `--processes 8` uses exactly 8 CPU cores
 
-**Default CPU Detection:**
-```bash
-# These commands are equivalent - both use ALL available CPU cores
-python organ_postprocessing.py --input /path/to/cases --output /path/to/output
-python organ_postprocessing.py --input /path/to/cases --output /path/to/output --processes $(nproc)  # Linux
-python organ_postprocessing.py --input /path/to/cases --output /path/to/output --processes %NUMBER_OF_PROCESSORS%  # Windows
-
-# The tool automatically detects your system's CPU count using multiprocessing.cpu_count()
-```
 
 ### Step 3: Merge Individual Segmentations (Optional)
 ```bash
