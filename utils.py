@@ -630,33 +630,39 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
                 |-- ...
     """
     os.makedirs(output_folder, exist_ok=True)
-    seg_folder = os.path.join(output_folder, 'segmentations')
+    seg_folder = os.path.join(output_folder, "segmentations")
     os.makedirs(seg_folder, exist_ok=True)
 
-    # Preallocate the combined label map
-    shape = next(iter(processed_segmentation_dict.values())).shape
-    combined = np.zeros(shape, dtype=np.uint16)
-
-    # Vectorized processing: sort by index to ensure higher label overwrites lower
-    for index, organ in sorted(class_map.items(), reverse=False):
-        mask = processed_segmentation_dict.get(organ)
-        if mask is None:
+    # Save each organ mask individually and discard from memory
+    for idx, organ in sorted(class_map.items()):
+        mask = processed_segmentation_dict.pop(organ, None)
+        if mask is None or not mask.any():
             continue
-        mask = mask.astype(bool)
 
-        # Save individual mask only if non-empty
-        if np.any(mask):
-            organ_img = nib.Nifti1Image(mask.astype(np.uint8), affine=reference_img.affine, header=reference_img.header)
-            nib.save(organ_img, os.path.join(seg_folder, f"{organ}.nii.gz"))
+        mask = mask.astype(np.uint8, copy=False)
+        nib.save(
+            nib.Nifti1Image(mask, reference_img.affine, reference_img.header),
+            os.path.join(seg_folder, f"{organ}.nii.gz")
+        )
+        del mask  # free memory
 
-            # Combine masks: higher index can overwrite previous ones (if needed)
-            combined[mask] = index
-
-            del organ_img  # Free memory
-            del mask
-            gc.collect()
-
+    # choose to save the combine label
     if if_save_combined:
-        # Save combined label file (one write)
-        combined_img = nib.Nifti1Image(combined, affine=reference_img.affine, header=reference_img.header)
-        nib.save(combined_img, os.path.join(output_folder, combined_filename))       
+        # Allocate combined volume
+        sample_path = os.path.join(seg_folder, f"{next(iter(class_map.values()))}.nii.gz")
+        shape = nib.load(sample_path).shape
+        combined = np.zeros(shape, dtype=np.uint8)
+
+        for idx, organ in sorted(class_map.items()):
+            organ_path = os.path.join(seg_folder, f"{organ}.nii.gz")
+            if not os.path.exists(organ_path):
+                continue
+            mask = nib.load(organ_path).get_fdata().astype(bool)
+            combined[mask] = idx
+            del mask  # free memory
+
+        # Save combined label map
+        nib.save(
+            nib.Nifti1Image(combined, reference_img.affine, reference_img.header),
+            os.path.join(output_folder, combined_filename)
+        )
