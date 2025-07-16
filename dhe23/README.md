@@ -53,25 +53,31 @@ This uses 5 parallel processes. You can adjust this depending on your CPU.
 Example Commands
 ------------------------------
 
-Run the following commands to post-process different datasets:
+Use the yaml file to post-process:
 
-    python -W ignore post_processing.py --source_dir data/PanTS --target_dir data/PanTS_processed --class_map class_map_abdomenatlas_pants --n_jobs 5
+    python -W ignore post_processing.py --config config.yaml
 
-    python -W ignore post_processing.py --source_dir data/PanTSV2 --target_dir data/PanTSV2_processed --class_map class_map_abdomenatlas_pants --n_jobs 5
+or run the following commands to post-process different datasets:
 
-    python -W ignore post_processing.py --source_dir data/JuMaMini_noCT --target_dir data/JuMaMini_noCT_processed --class_map class_map_abdomenatlas_1_1 --n_jobs 5
+    python -W ignore post_processing.py --source_dir data/PanTS --target_dir data/PanTS_processed --n_jobs 5
 
-    python -W ignore post_processing.py --source_dir /mnt/bodymaps/mask_only/JuMaMini/JuMaMini --target_dir /mnt/T9/temp_data_to_delete_very_soon/zzhou82/JuMaMini_dhe23 --class_map class_map_abdomenatlas_1_1 --n_jobs 80
+    python -W ignore post_processing.py --source_dir data/PanTSV2 --target_dir data/PanTSV2_processed --n_jobs 5
 
-    python -W ignore post_processing.py --source_dir /mnt/bodymaps/mask_only/JuMa/JuMa --target_dir /mnt/T9/temp_data_to_delete_very_soon/zzhou82/JuMa_dhe23 --class_map class_map_abdomenatlas_1_1 --n_jobs 64
+    python -W ignore post_processing.py --source_dir data/JuMaMini_noCT --target_dir data/JuMaMini_noCT_processed --n_jobs 5
 
-    python -W ignore post_processing.py --source_dir /mnt/bodymaps/mask_only/AbdomenAtlas1.1/AbdomenAtlas1.1 --target_dir /mnt/T9/temp_data_to_delete_very_soon/zzhou82/AA1.1_dhe23 --class_map class_map_abdomenatlas_1_1 --n_jobs 70 --start_idx 1000 --end_idx -1
+    python -W ignore post_processing.py --source_dir /mnt/bodymaps/mask_only/JuMaMini/JuMaMini --target_dir /mnt/T9/temp_data_to_delete_very_soon/zzhou82/JuMaMini_dhe23 --n_jobs 80
+
+    python -W ignore post_processing.py --source_dir /mnt/bodymaps/mask_only/JuMa/JuMa --target_dir /mnt/T9/temp_data_to_delete_very_soon/zzhou82/JuMa_dhe23 --n_jobs 64
+
+    python -W ignore post_processing.py --source_dir /mnt/bodymaps/mask_only/AbdomenAtlas1.1/AbdomenAtlas1.1 --target_dir /mnt/T9/temp_data_to_delete_very_soon/zzhou82/AA1.1_dhe23 --n_jobs 70 --start_idx 1000 --end_idx -1
+
+    python -W ignore post_processing.py --source_dir ../data/AbdomenAtlasPro --target_dir outputs --n_jobs 64
 
 ------------------------------
 Requirements
 ------------------------------
 
-- Python 3.12 or higher
+- Python 3.9 or higher
 
 To install dependencies (if requirements.txt is available):
 

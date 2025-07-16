@@ -1,0 +1,8 @@
+source_dir: ./data
+target_dir: ./output
+n_jobs: 1
+
+# Default values
+axcodes: auto # or specify using ("R", "A", "S")
+start_idx: 0
+end_idx: -1

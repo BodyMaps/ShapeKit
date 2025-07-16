@@ -1,5 +1,7 @@
-cc3d
+connected-components-3d
+jsonargparse[signatures]
 nibabel
 numpy
 scipy
 tqdm
+# black
