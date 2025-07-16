@@ -1,0 +1,7 @@
+input_folder: ./data
+output_folder: ./output
+cpu_count: 4
+
+# Default values
+start_idx: 0
+end_idx: -1
