@@ -1,10 +1,9 @@
 class Settings:
     def __init__(
         self,
-        source_dir: str,
-        target_dir: str,
-        n_jobs: int = 4,
-        axcodes: str = "auto",
+        input_folder: str = None,
+        output_folder: str = None,
+        cpu_count: int = 4,
         start_idx: int = 0,
         end_idx: int = -1,
     ):
@@ -12,26 +11,24 @@ class Settings:
         Postprocessing abdominal CT masks.
 
         Args:
-            source_dir: Directory containing .nii.gz files to be postprocessed.
-            target_dir: Directory to save the postprocessed files.
-            n_jobs: Number of parallel jobs to run for postprocessing.
-            axcodes: Axes codes for the orientation of the images. Can be a tuple or 'auto'.
-                    If 'auto', it will be in the order of (R, A, S).
+            input_folder: Directory containing .nii.gz files to be postprocessed.
+            output_folder: Directory to save the postprocessed files.
+            cpu_count: Number of parallel jobs to run for postprocessing.
             start_idx: Start index (inclusive) for selecting a subset of source directories.
             end_idx: End index (exclusive) for selecting a subset of source directories. If -1, all files after start index (inclusive) are processed.
         """
         # sanity checks
-        assert isinstance(axcodes, (tuple, str)), "axcodes must be a tuple or string"
-        assert n_jobs > 0, "n_jobs must be a positive integer"
+        assert input_folder is not None, "input_folder must be specified"
+        assert output_folder is not None, "output_folder must be specified"
+        assert cpu_count > 0, "cpu_count must be a positive integer"
         if end_idx == -1:
             assert start_idx >= 0, "start_idx must be non-negative"
         else:
             assert start_idx >= 0, "start_idx must be non-negative"
             assert end_idx > start_idx, "end_idx must be greater than start_idx"
 
-        self.source_dir = source_dir
-        self.target_dir = target_dir
-        self.n_jobs = n_jobs
-        self.axcodes = axcodes
+        self.input_folder = input_folder
+        self.output_folder = output_folder
+        self.cpu_count = cpu_count
         self.start_idx = start_idx
         self.end_idx = end_idx

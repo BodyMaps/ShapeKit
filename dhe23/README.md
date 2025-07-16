@@ -9,45 +9,28 @@ multiprocessing to accelerate processing.
 Directory Structure
 ------------------------------
 
-All input and output data should be stored under the ./data directory:
-
-./data/
-├── <source_dir_1>/         # Raw labeled segmentation data
-├── <source_dir_2>/         # Another dataset
-├── ...
-
-- <source_dir>: Input directory with segmentation label files.
-- <target_dir>: Output directory for processed results.
-
-You must specify both --source_dir and --target_dir when running the script.
+All input and output data should be specified with input_folder and output_folder, either using configuration file or arguments:
+```
+INPUT or OUTPUT
+└── CASE_001
+    ├── combined_labels.nii.gz (optional)
+    └── segmentations
+            ├── liver.nii.gz
+            ...
+            └── pancreas_head.nii.gz
+```
 
 ------------------------------
-Class Map
+Supported Class Map
 ------------------------------
 
-To remap segmentation class labels, define your mappings in the 'class_map.py' file.
-
-Example (inside class_map.py):
-
-    class_map_example = {
-        "1": "liver",
-        "2": "kidney",
-        "3": "spleen",
-        ...
-    }
-
-You can define multiple mappings and select one with the --class_map argument.
+A list of supported organs is available in class_maps.py. Please refer to that file for details. Please make sure the organ name of your segmentation file is exactly the same with the supported organ name.
 
 ------------------------------
 Multiprocessing
 ------------------------------
 
-Use the --n_jobs argument to enable multiprocessing.
-
-Example:
-    --n_jobs 5
-
-This uses 5 parallel processes. You can adjust this depending on your CPU.
+Use ``--cpu_count`` to enable multiprocessing. For example, setting ``--cpu_count 5`` will use 5 parallel processes. You can adjust this depending on your CPU count.
 
 ------------------------------
 Example Commands
@@ -55,23 +38,29 @@ Example Commands
 
 Use the yaml file to post-process:
 
-    python -W ignore post_processing.py --config config.yaml
+    python main.py --config config.yaml
 
 or run the following commands to post-process different datasets:
 
-    python -W ignore post_processing.py --source_dir data/PanTS --target_dir data/PanTS_processed --n_jobs 5
+    python main.py --input_folder data --output_folder outputs --cpu_count 4
 
-    python -W ignore post_processing.py --source_dir data/PanTSV2 --target_dir data/PanTSV2_processed --n_jobs 5
+    # For Zongwei's use. To be removed.
+    python -W ignore main.py --input_folder /mnt/bodymaps/mask_only/JuMaMini/JuMaMini --output_folder /mnt/T9/temp_data_to_delete_very_soon/zzhou82/JuMaMini_dhe23 --cpu_count 80
 
-    python -W ignore post_processing.py --source_dir data/JuMaMini_noCT --target_dir data/JuMaMini_noCT_processed --n_jobs 5
+    python -W ignore main.py --input_folder /mnt/bodymaps/mask_only/JuMa/JuMa --output_folder /mnt/T9/temp_data_to_delete_very_soon/zzhou82/JuMa_dhe23 --cpu_count 64
 
-    python -W ignore post_processing.py --source_dir /mnt/bodymaps/mask_only/JuMaMini/JuMaMini --target_dir /mnt/T9/temp_data_to_delete_very_soon/zzhou82/JuMaMini_dhe23 --n_jobs 80
+    python -W ignore main.py --input_folder /mnt/bodymaps/mask_only/AbdomenAtlas1.1/AbdomenAtlas1.1 --output_folder /mnt/T9/temp_data_to_delete_very_soon/zzhou82/AA1.1_dhe23 --cpu_count 70 --start_idx 1000 --end_idx -1
 
-    python -W ignore post_processing.py --source_dir /mnt/bodymaps/mask_only/JuMa/JuMa --target_dir /mnt/T9/temp_data_to_delete_very_soon/zzhou82/JuMa_dhe23 --n_jobs 64
+    # for Dongli's use. To be removed.
+    python -W ignore main.py --input_folder data/PanTS --output_folder data/PanTS_processed --cpu_count 5
 
-    python -W ignore post_processing.py --source_dir /mnt/bodymaps/mask_only/AbdomenAtlas1.1/AbdomenAtlas1.1 --target_dir /mnt/T9/temp_data_to_delete_very_soon/zzhou82/AA1.1_dhe23 --n_jobs 70 --start_idx 1000 --end_idx -1
+    python -W ignore main.py --input_folder data/PanTSV2 --output_folder data/PanTSV2_processed --cpu_count 5
 
-    python -W ignore post_processing.py --source_dir ../data/AbdomenAtlasPro --target_dir outputs --n_jobs 64
+    python -W ignore main.py --input_folder data/JuMaMini_noCT --output_folder data/JuMaMini_noCT_processed --cpu_count 5
+    
+    python -W ignore main.py --input_folder data/AbdomenAtlasPro --output_folder outputs --cpu_count 64
+
+    python main.py --input_folder data --output_folder outputs --cpu_count 1
 
 ------------------------------
 Requirements

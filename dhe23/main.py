@@ -213,7 +213,7 @@ class OrganRectifier:
                 continue  # Skip the main component
 
             comp_mask = labeled_comps == i
-            comp_coords = extract_surface_coordinates(comp_mask)
+            comp_coords = np.argwhere(comp_mask)
 
             # Remove the component if it's too small
             if comp_coords.size < min_size:
@@ -479,7 +479,7 @@ class OrganRectifier:
             z_min, z_max = pancreas_coords[:, 2].min(), pancreas_coords[:, 2].max()
         else:
             logger.debug(
-                f"No pancreas found for {class_maps_supported[target_label]} post-processing."
+                f"No pancreas duct found for {class_maps_supported[target_label]} post-processing."
             )
             return seg_masks
 
@@ -1220,7 +1220,7 @@ def process_organs(data_inputs, debug=False):
         combined_seg[mask.astype(bool)] = unsupported_label_index
         class_maps_output[unsupported_label_index] = f.name.split(".", 1)[0]
         unsupported_label_index += 1
-    for label, mask in seg_masks.items():
+    for label, mask in sorted(seg_masks.items()):
         combined_seg[mask.astype(bool)] = label
         class_maps_output[label] = class_maps_supported[label]
 
@@ -1243,9 +1243,9 @@ def process_organs(data_inputs, debug=False):
 if __name__ == "__main__":
     args = auto_cli(Settings)
 
-    source_dir = Path(args.source_dir)
-    target_dir = Path(args.target_dir)
-    n_jobs = args.n_jobs
+    source_dir = Path(args.input_folder)
+    target_dir = Path(args.output_folder)
+    cpu_count = args.cpu_count
 
     source_sub_dirs = sorted(
         [i for i in source_dir.iterdir() if i.name.startswith("BDMAP")],
@@ -1259,21 +1259,26 @@ if __name__ == "__main__":
         f"Processing {len(source_sub_dirs)} source folders from index {args.start_idx} to {args.end_idx or 'end'}"
     )
 
-    logger.info(f"Start post-processing with {n_jobs} jobs")
     data_inputs = [
         (source_sub_dir, target_dir / source_sub_dir.name)
         for source_sub_dir in source_sub_dirs
     ]
 
-    if n_jobs > 1:
-        with multiprocessing.Pool(n_jobs) as pool:
+    if cpu_count > 1:
+        cpu_count = min(cpu_count, len(data_inputs))
+        logger.info(f"Start post-processing with {cpu_count} jobs")
+        with multiprocessing.Pool(cpu_count) as pool:
             pool.map(process_organs, data_inputs)
     else:
         logger.warning(
-            "This is for debugging purpose. Please use multiprocessing (i.e., set n_jobs > 1) if you are processing a large number of files."
+            "This is for debugging purpose. Please use multiprocessing (i.e., set cpu_count > 1) if you are processing a large number of files."
         )
         for i in data_inputs:
-            if "BDMAP_00000500" in i[0].name:
+            if "BDMAP_00001000" in i[0].name:
+                from time import time
+                start = time()
                 process_organs(i, debug=True)
+                end = time()
+                logger.info(f"Processing time for {i[0].name}: {end - start:.2f} seconds")
                 break
     logger.info("Finished postprocessing")
