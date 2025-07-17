@@ -4,7 +4,7 @@ from multiprocessing import cpu_count
 from organs_postprocessing import *
 import logging
 import yaml
-
+import traceback
 with open('config.yaml', 'r') as f:
     config = yaml.safe_load(f)
 subfolder_name = config['subfolder_name']
@@ -108,6 +108,7 @@ def main(input_path, input_folder_name, output_path=None):
     # combine later as calibration reference
     segmentation = combine_segmentation_dict(segmentation_dict, class_map)
     
+    # print("[RANDOM] Yay")
     # process
     postprocessed_segmentation_dict = process_organs(
         segmentation_dict, 
@@ -127,53 +128,46 @@ def main(input_path, input_folder_name, output_path=None):
         if_save_combined=save_combined_label_bool
     )
 
+    # free up memories
+    del img
+    del segmentation_dict
 
-############################## Parallel Execution ################################
+    del segmentation
+    del postprocessed_segmentation_dict
+    gc.collect()
+
+
+
+
+############################## Parallel Execution with multiprocessing.Pool ##############################
 import os
-from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError, CancelledError
-from concurrent.futures import wait, FIRST_COMPLETED
+from multiprocessing import Pool
 
-def process_case(sub_folder, input_folder, output_folder):
-    input_path = os.path.join(input_folder, sub_folder)
-    print(f"[INFO] Processing {sub_folder}")
-    main(
-        input_path=input_path,
-        input_folder_name=sub_folder,
-        output_path=output_folder,
-    )
+def process_case_wrapper(args):
+    sub_folder, input_folder, output_folder = args
+    try:
+        print(f"[INFO] Processing {sub_folder}")
+        input_path = os.path.join(input_folder, sub_folder)
+        main(input_path, sub_folder, output_folder)
+        logging.info(f"[ShapeKit] Successfully processed {sub_folder}")
+    except MemoryError as mem_err:
+        logging.error(f"MemoryError while processing {sub_folder}: {mem_err}")
+        print(f"[WARNING] MemoryError in {sub_folder}, skipping.")
+    except Exception as e:
+        logging.error(f"[CRASH] {sub_folder}: {e}")
+        traceback.print_exc()
 
 
 def run_in_parallel(sub_folders, input_folder, output_folder, max_workers=4):
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        active_futures = []
-        print(f"[INFO] Start processing {len(sub_folders)} cases with up to {max_workers} workers.")
+    print(f"[INFO] Start processing {len(sub_folders)} cases with up to {max_workers} workers.")
+    
+    args_list = [(sub_folder, input_folder, output_folder) for sub_folder in sub_folders]
 
-        for sub_folder in sub_folders:
-            future = executor.submit(process_case, sub_folder, input_folder, output_folder)
-            active_futures.append((sub_folder, future))
+    with Pool(processes=max_workers) as pool:
+        pool.map(process_case_wrapper, args_list)
+############################## Parallel Execution with multiprocessing.Pool ##############################
 
-            # If we're at max workers, wait until one finishes
-            if len(active_futures) >= max_workers:
-                done, _ = wait([f for _, f in active_futures], return_when=FIRST_COMPLETED)
-                for sub_folder, f in active_futures:
-                    if f in done:
-                        try:
-                            f.result()
-                            logging.info(f"[ShapeKit] Successfully processed {sub_folder}")
-                        except MemoryError as mem_err:
-                            logging.error(f"MemoryError while processing {sub_folder}: {mem_err}")
-                            print(f"[WARNING] MemoryError in {sub_folder}, skipping.")
-                # Keep only unfinished ones
-                active_futures = [(sf, f) for sf, f in active_futures if not f.done()]
 
-        # Final flush
-        for sub_folder, f in active_futures:
-            try:
-                f.result()
-                logging.info(f"[ShapeKit] Successfully processed {sub_folder}")
-            except MemoryError as mem_err:
-                logging.error(f"MemoryError while processing {sub_folder}: {mem_err}")
-                print(f"[WARNING] MemoryError in {sub_folder}, skipping.")
 
 
 parser = argparse.ArgumentParser(description="Anatomical-aware post-processing")
