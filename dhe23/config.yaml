@@ -1,7 +1,8 @@
 input_folder: ./data
-output_folder: ./output
+output_folder: ./outputs
 cpu_count: 4
 
-# Default values
 start_idx: 0
 end_idx: -1
+
+save_combined_labels: false
