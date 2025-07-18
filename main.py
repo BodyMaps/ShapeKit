@@ -2,6 +2,7 @@ import argparse
 import multiprocessing
 from multiprocessing import cpu_count
 from organs_postprocessing import *
+from vertebrae_postprocessing import postprocessing_vertebrae
 import logging
 import yaml
 import traceback
@@ -78,7 +79,6 @@ def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.arra
         segmentation_dict = post_processing_femur(segmentation_dict, axis_map, calibration_standards_mask)
     if 'adrenal_gland' in target_organs:
         segmentation_dict = post_processing_adrenal_gland(segmentation_dict, axis_map, calibration_standards_mask)
-
     if 'aorta' in target_organs or 'postcava' in target_organs:
         segmentation_dict = post_processing_aorta_postcava(segmentation_dict)
     if 'bladder' in target_organs or 'prostate' in target_organs:
@@ -87,6 +87,10 @@ def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.arra
             segmentation=combined_seg,
             axis=axis_map['z']
         )
+
+    # process with the vertebrae
+    if 'vertebrae' in target_organs:
+        segmentation_dict = postprocessing_vertebrae(segmentation_dict)
 
     return segmentation_dict
 

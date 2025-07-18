@@ -28,6 +28,30 @@ class_map:
   23: portal_vein_and_splenic_vein
   24: prostate
   25: rectum
+  26: vertebrae_L5
+  27: vertebrae_L4
+  28: vertebrae_L3
+  29: vertebrae_L2
+  30: vertebrae_L1
+  31: vertebrae_T12
+  32: vertebrae_T11
+  33: vertebrae_T10
+  34: vertebrae_T9
+  35: vertebrae_T8
+  36: vertebrae_T7
+  37: vertebrae_T6
+  38: vertebrae_T5
+  39: vertebrae_T4
+  40: vertebrae_T3
+  41: vertebrae_T2
+  42: vertebrae_T1
+  43: vertebrae_C7
+  44: vertebrae_C6
+  45: vertebrae_C5
+  46: vertebrae_C4
+  47: vertebrae_C3
+  48: vertebrae_C2
+  49: vertebrae_C1
 
 # plug-and-play like Lego! choose organs for processing
 target_organs:
@@ -46,6 +70,7 @@ target_organs:
   - prostate
   - spleen
   - stomach
+  - vertebraes
 
 # list of false positive suspects
 organ_adjacency_map:
