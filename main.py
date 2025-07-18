@@ -5,6 +5,10 @@ from organs_postprocessing import *
 import logging
 import yaml
 import traceback
+
+
+
+##############################################################
 with open('config.yaml', 'r') as f:
     config = yaml.safe_load(f)
 subfolder_name = config['subfolder_name']
