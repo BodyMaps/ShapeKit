@@ -70,7 +70,7 @@ target_organs:
   - prostate
   - spleen
   - stomach
-  - vertebraes
+
 
 # list of false positive suspects
 organ_adjacency_map:
