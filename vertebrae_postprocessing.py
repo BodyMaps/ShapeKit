@@ -77,36 +77,6 @@ def fill(segmentation):
     return replace_segmentation
 
 
-def smooth_binary_image(binary_image, iterations=1):
-    """
-    Smoothing tools
-    """
-    num_dimensions = binary_image.ndim
-    structure = generate_binary_structure(num_dimensions, 1)  # Structure for the number of dimensions
-    smoothed_image = binary_dilation(binary_image, structure=structure, iterations=iterations)
-    smoothed_image = binary_erosion(smoothed_image, structure=structure, iterations=iterations)
-
-    return smoothed_image
-
-
-def smooth_segmentation(segmentation):
-    """
-    General smoothing.
-    """
-    smoothed_segmentation = np.zeros_like(segmentation)
-
-    unique_labels = np.unique(segmentation)
-    for label_id in tqdm(unique_labels, desc='[INFO] smoothing'):
-        if label_id == 0:
-            continue
-
-        mask = (segmentation == label_id).astype(int) 
-        smoothed_mask = smooth_binary_image(mask)
-        smoothed_segmentation[smoothed_mask] = label_id  
-
-    return smoothed_segmentation
-
-
 def split_overmerged_triplets(merged_segmentation, size_dict, label_z_centers, counter, size_threshold_ratio=1.5):
     """
     Split over-merged vertebrae based on a triplet rule:
@@ -160,11 +130,7 @@ def wise_split_vertebra(coords):
     """
     Split voxels into two equal parts along the Z-axis.
     
-    Args:
-        coords (np.ndarray): shape (N, 3), voxel coordinates.
-
-    Returns:
-        coords_upper, coords_lower: equally sized top and bottom halves.
+    TODO add ai-learnt splitor in the future
     """
     # Sort by Z descending (top to bottom)
     sorted_coords = coords[np.argsort(coords[:, 2])[::-1]]
@@ -366,6 +332,7 @@ def merge_cc_of_adjacent(cc_cur, cc_above, voxel_supression_threshold):
 
 
 def get_relevant_ccs(cc, keep_threshold, keep_main=True):
+
     if keep_main:
         cutoff_idx = 1
     else:
@@ -379,7 +346,6 @@ def spine_adjacent_pairs(img, voxel_supression_threshold=10, default_val=0):
     """
     labels = list(all_labels.keys())
     mod_img = copy.deepcopy(img)
-
     
     #Get triplets of adjacent vertebras
     triplets = []
@@ -396,7 +362,6 @@ def spine_adjacent_pairs(img, voxel_supression_threshold=10, default_val=0):
             assert l==len(labels)-1, "Just to be sure" #TODO: Remove before release
             triplets.append((labels[l-1], labels[l]))
     
-
     for idx, triplet in enumerate(triplets):
         print(f"[INFO] Processing triplet no. {idx}/{len(triplets)}")
         #Seperately handel first and last triplet
@@ -478,9 +443,8 @@ def postprocessing_vertebrae(segmentation_dict: dict):
 
     Steps:
         1. Reallocate label IDs based on size (e.g. largest → most important label)
-        2. Smooth adjacent vertebrae to suppress overlaps or mislabels
-        3. Suppress all non-largest connected components
-        4. Fill holes within vertebrae volumes
+        2. Suppress all non-largest connected components
+        3. Fill holes within vertebrae volumes
     """
 
     # Step 1: Stack all vertebrae segmentations into a single 3D array
@@ -490,24 +454,21 @@ def postprocessing_vertebrae(segmentation_dict: dict):
         return segmentation_dict
     
     vertebrae_segmentations = np.zeros_like(next(iter(segmentation_dict.values())), dtype=np.uint8)
-
     for idx, vertebra_name in enumerate(sorted(vertebrae_labels), start=1):
         mask = segmentation_dict[vertebra_name]
         vertebrae_segmentations[mask > 0] = idx  # Assign unique label per vertebra
 
-    # Step 2: Reallocate labels based on size
+    # Reallocate labels based on size
     segmentation = reallocate_based_on_size(vertebrae_segmentations)
-
-    # Step 3: Smooth between adjacent vertebrae
     segmentation = spine_adjacent_pairs(segmentation, voxel_supression_threshold=100)
 
-    # Step 4: Suppress non-largest components (remove noise)
+    # Suppress non-largest components (remove noise)
     segmentation = supress_non_largest_components(np.array(segmentation))
 
-    # Step 5: Fill internal holes
+    # Fill internal holes
     segmentation = fill(segmentation)
 
-    # Step 6: Split back into individual vertebrae masks
+    # Split back into individual vertebrae masks
     processed_dict = {}
     for label_id in np.unique(segmentation):
         if label_id == 0:
