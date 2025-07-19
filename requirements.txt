@@ -26,3 +26,4 @@ statsmodels
 packaging
 scikit-learn
 scikit-image
+jsonargparse

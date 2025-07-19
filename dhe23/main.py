@@ -23,7 +23,7 @@ from scipy.ndimage import (
 from scipy.spatial import KDTree
 
 from class_maps import class_maps_supported
-from utils import Settings
+from utils import Settings, MaskCropper
 
 # To avoid cluttering the output, keep the logging level as INFO
 logging.basicConfig(level=logging.INFO)
@@ -1028,7 +1028,7 @@ def process_organs(data_inputs, debug=False):
     """
     name2label_supported = {name: label for label, name in class_maps_supported.items()}
 
-    source_dir, target_dir = data_inputs
+    source_dir, target_dir, save_combined_labels = data_inputs
     logger.info(f"Processing {source_dir.name}")
 
     seg_files = list((source_dir / "segmentations").glob("*.nii.gz"))
@@ -1060,6 +1060,10 @@ def process_organs(data_inputs, debug=False):
     transform = ornt_transform(orig_ornt, intermediate_ornt)
     for label, data in seg_masks.items():
         seg_masks[label] = apply_orientation(data, transform)
+
+    mask_cropper = MaskCropper()
+    mask_cropper.get_tightest_bbox(seg_masks)
+    seg_masks = mask_cropper.crop(seg_masks)
 
     # make sure lung postprocessing follows liver postprocessing
     processing_sqeuence = [
@@ -1185,14 +1189,16 @@ def process_organs(data_inputs, debug=False):
         # if label in keep_fragmented_labels.values():
         seg_masks = remove_small_components(seg_masks, label)
 
-    ################### Save the results ###################
-    ind_target_dir = target_dir / "segmentations"
-    ind_target_dir.mkdir(parents=True, exist_ok=True)
+    seg_masks = mask_cropper.restore(seg_masks)
 
     # tranform back to original orientation
     inverse_transform = ornt_transform(intermediate_ornt, orig_ornt)
     for label, data in seg_masks.items():
         seg_masks[label] = apply_orientation(data.astype(np.uint8), inverse_transform)
+
+    ################### Save the results ###################
+    ind_target_dir = target_dir / "segmentations"
+    ind_target_dir.mkdir(parents=True, exist_ok=True)
 
     # save individual labels
     for f in seg_files:
@@ -1212,26 +1218,27 @@ def process_organs(data_inputs, debug=False):
             shutil.copy(f, ind_target_path)
 
     # save combined labels
-    combined_seg = np.zeros(example_seg.shape, dtype=np.uint8)
-    class_maps_output = {}
-    unsupported_label_index = max(class_maps_supported) + 1
-    for f in files_skipped:
-        mask = nib.load(f).get_fdata().astype(bool)
-        combined_seg[mask.astype(bool)] = unsupported_label_index
-        class_maps_output[unsupported_label_index] = f.name.split(".", 1)[0]
-        unsupported_label_index += 1
-    for label, mask in sorted(seg_masks.items()):
-        combined_seg[mask.astype(bool)] = label
-        class_maps_output[label] = class_maps_supported[label]
+    if save_combined_labels:
+        combined_seg = np.zeros(example_seg.shape, dtype=np.uint8)
+        class_maps_output = {}
+        unsupported_label_index = max(class_maps_supported) + 1
+        for f in files_skipped:
+            mask = nib.load(f).get_fdata().astype(bool)
+            combined_seg[mask.astype(bool)] = unsupported_label_index
+            class_maps_output[unsupported_label_index] = f.name.split(".", 1)[0]
+            unsupported_label_index += 1
+        for label, mask in sorted(seg_masks.items()):
+            combined_seg[mask.astype(bool)] = label
+            class_maps_output[label] = class_maps_supported[label]
 
-    combined_nifti = nib.Nifti1Image(combined_seg, affine, header)
-    combined_path = target_dir / "combined_labels.nii.gz"
-    nib.save(combined_nifti, combined_path)
+        combined_nifti = nib.Nifti1Image(combined_seg, affine, header)
+        combined_path = target_dir / "combined_labels.nii.gz"
+        nib.save(combined_nifti, combined_path)
 
-    # save new class maps
-    class_maps_output = dict(sorted(class_maps_output.items()))
-    with open(target_dir / "class_maps.json", "w") as f:
-        json.dump(class_maps_output, f, indent=4)
+        # save new class maps
+        class_maps_output = dict(sorted(class_maps_output.items()))
+        with open(target_dir / "class_maps.json", "w") as f:
+            json.dump(class_maps_output, f, indent=4)
 
     # copy CT image if exists
     if (source_dir / "ct.nii.gz").exists():
@@ -1260,7 +1267,7 @@ if __name__ == "__main__":
     )
 
     data_inputs = [
-        (source_sub_dir, target_dir / source_sub_dir.name)
+        (source_sub_dir, target_dir / source_sub_dir.name, args.save_combined_labels)
         for source_sub_dir in source_sub_dirs
     ]
 
@@ -1276,9 +1283,12 @@ if __name__ == "__main__":
         for i in data_inputs:
             if "BDMAP_00001000" in i[0].name:
                 from time import time
+
                 start = time()
                 process_organs(i, debug=True)
                 end = time()
-                logger.info(f"Processing time for {i[0].name}: {end - start:.2f} seconds")
+                logger.info(
+                    f"Processing time for {i[0].name}: {end - start:.2f} seconds"
+                )
                 break
     logger.info("Finished postprocessing")

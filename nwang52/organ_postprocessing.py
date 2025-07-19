@@ -8,7 +8,7 @@ from scipy import ndimage
 import multiprocessing
 import time
 from functools import partial
-
+from concurrent.futures import ProcessPoolExecutor, as_completed
 # Import class maps
 from class_maps import available_class_maps
 
@@ -1077,14 +1077,14 @@ def process_case(case_dir, output_dir, class_map_name="all"):
         return (False, f"{case_folder} processing error: {str(e)}")
 
 def process_all_cases(input_dir, output_dir=None, num_processes=None, case_list_file=None, class_map_name="all"):
-    """Process all cases using multiple CPU cores
+    """Process all cases using dynamic task assignment
     
     Args:
         input_dir: Directory containing all case subdirectories
         output_dir: Directory where processed results will be saved. If None,
                    results are saved in subdirectories of each case
-        num_processes: Number of processes to use. If None, uses cpu_count()
-        case_list_file: Path to txt file containing case names to process. If None, processes all BDMAP cases found
+        num_processes: Number of processes to use for parallel processing
+        case_list_file: Path to txt file containing case names to process. If None, processes all cases
         class_map_name: Name of the class map to use for processing
     """
     # Validate class map
@@ -1097,29 +1097,73 @@ def process_all_cases(input_dir, output_dir=None, num_processes=None, case_list_
     # Get all case folders
     case_folders = [f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f))]
     
-    # Filter and sort BDMAP cases by number
+    # Filter and sort BDMAP cases by number and prefix
     bdmap_cases = []
     for folder in case_folders:
-        # More flexible BDMAP format checking
+        # More flexible BDMAP format checking - support both numeric and alphanumeric formats
         if folder.startswith('BDMAP_'):
             try:
-                # Extract the number part after 'BDMAP_'
-                number_part = folder.split('_')[1]
-                case_number = int(number_part)
-                bdmap_cases.append((case_number, folder))
-                logging.debug(f"Found BDMAP case: {folder} -> {case_number}")
-            except (ValueError, IndexError):
-                logging.warning(f"Invalid BDMAP case format: {folder}")
+                # Extract the part after 'BDMAP_'
+                id_part = folder.split('_')[1]
+                
+                # Check if it's pure numeric (original format)
+                if id_part.isdigit():
+                    case_number = int(id_part)
+                    sort_key = (0, case_number, '')  # (type, number, prefix)
+                    bdmap_cases.append((sort_key, folder))
+                    logging.debug(f"Found numeric BDMAP case: {folder} -> {case_number}")
+                
+                # Check if it's alphanumeric format (A/V prefix + numbers)
+                elif len(id_part) > 1 and id_part[0].isalpha() and id_part[1:].isdigit():
+                    prefix = id_part[0]
+                    case_number = int(id_part[1:])
+                    # Sort: A cases first (type=1), then V cases (type=2), then by number
+                    type_order = 1 if prefix == 'A' else 2 if prefix == 'V' else 3
+                    sort_key = (type_order, case_number, prefix)
+                    bdmap_cases.append((sort_key, folder))
+                    logging.debug(f"Found alphanumeric BDMAP case: {folder} -> {prefix}{case_number}")
+                
+                else:
+                    logging.warning(f"Unknown BDMAP case format: {folder}")
+                    continue
+                    
+            except (ValueError, IndexError) as e:
+                logging.warning(f"Invalid BDMAP case format: {folder} - {str(e)}")
                 continue
     
-    # Sort by case number
+    # Sort by the sort key: first by type (numeric=0, A=1, V=2), then by number, then by prefix
     bdmap_cases.sort(key=lambda x: x[0])
     
-    # Debug: Show first few cases found
+    # Convert to the format expected by the rest of the code
+    bdmap_cases_formatted = []
+    for sort_key, folder in bdmap_cases:
+        type_order, case_number, prefix = sort_key
+        if type_order == 0:  # Numeric format
+            display_id = case_number
+        else:  # Alphanumeric format
+            display_id = f"{prefix}{case_number}"
+        bdmap_cases_formatted.append((display_id, folder))
+    
+    bdmap_cases = bdmap_cases_formatted
+    
+    # Debug: Show first few cases found and case type distribution
     if bdmap_cases:
         logging.info(f"Found {len(bdmap_cases)} total BDMAP cases")
+        
+        # Count different types
+        numeric_count = sum(1 for case_id, _ in bdmap_cases if isinstance(case_id, int))
+        a_count = sum(1 for case_id, _ in bdmap_cases if isinstance(case_id, str) and case_id.startswith('A'))
+        v_count = sum(1 for case_id, _ in bdmap_cases if isinstance(case_id, str) and case_id.startswith('V'))
+        
+        logging.info(f"Case type distribution: Numeric: {numeric_count}, A-prefix: {a_count}, V-prefix: {v_count}")
+        
         sample_cases = [folder for _, folder in bdmap_cases[:5]]
         logging.info(f"Sample cases (first 5): {sample_cases}")
+        
+        # Show range information
+        first_case_id, first_case_name = bdmap_cases[0]
+        last_case_id, last_case_name = bdmap_cases[-1]
+        logging.info(f"Case range: {first_case_name} (ID: {first_case_id}) to {last_case_name} (ID: {last_case_id})")
     else:
         logging.error("No BDMAP cases found at all")
         # Show all folders for debugging
@@ -1135,7 +1179,7 @@ def process_all_cases(input_dir, output_dir=None, num_processes=None, case_list_
             logging.info(f"Read {len(specified_cases)} case names from {case_list_file}")
             
             # Filter bdmap_cases to only include those specified in the txt file
-            target_cases = [(num, name) for num, name in bdmap_cases if name in specified_cases]
+            target_cases = [(case_id, name) for case_id, name in bdmap_cases if name in specified_cases]
             
             # Check for cases that were specified but not found
             found_cases = {name for _, name in target_cases}
@@ -1151,9 +1195,9 @@ def process_all_cases(input_dir, output_dir=None, num_processes=None, case_list_
             logging.error(f"Error reading case list file {case_list_file}: {str(e)}")
             return
     else:
-        # Default: process ALL BDMAP cases found in the input directory
+        # Default: process all BDMAP cases found in the directory
         target_cases = bdmap_cases
-        logging.info(f"Processing all BDMAP cases found in input directory")
+        logging.info(f"Processing all {len(target_cases)} BDMAP cases found in directory")
     
     # Extract sorted case folder names
     sorted_case_folders = [folder for _, folder in target_cases]
@@ -1164,40 +1208,187 @@ def process_all_cases(input_dir, output_dir=None, num_processes=None, case_list_
             logging.error("No valid cases found matching the specified case list file")
         else:
             logging.error("No valid BDMAP cases found in the input directory")
+            # List available cases for debugging
+            available_cases = [folder for _, folder in bdmap_cases[:10]]  # Show first 10
+            if available_cases:
+                logging.info(f"Available cases (first 10): {available_cases}")
+                # Show the range of case IDs found
+                case_ids = [case_id for case_id, _ in bdmap_cases]
+                logging.info(f"Available case IDs (first 10): {case_ids[:10]}")
         return
     
     logging.info(f"Found {total_cases} valid cases to process")
     if sorted_case_folders:
-        logging.info(f"Processing range: {sorted_case_folders[0]} to {sorted_case_folders[-1]}")
+        first_case_id = next((case_id for case_id, name in target_cases if name == sorted_case_folders[0]), "Unknown")
+        last_case_id = next((case_id for case_id, name in target_cases if name == sorted_case_folders[-1]), "Unknown")
+        logging.info(f"Processing range: {sorted_case_folders[0]} (ID: {first_case_id}) to {sorted_case_folders[-1]} (ID: {last_case_id})")
     
     # Create output directory if specified
     if output_dir is not None:
         os.makedirs(output_dir, exist_ok=True)
         logging.info(f"Output will be saved to: {output_dir}")
     
-    # Create summary log file in appropriate location
-    summary_log = os.path.join(output_dir if output_dir is not None else input_dir, "postprocessing_summary.log")
+    # Create log files in appropriate location
+    log_dir = output_dir if output_dir is not None else input_dir
+    
+    # Main summary log
+    summary_log = os.path.join(log_dir, "postprocessing_summary.log")
     file_handler = logging.FileHandler(summary_log, mode='w')
     file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
     logging.getLogger().addHandler(file_handler)
+    
+    # Create separate processing order log
+    processing_order_log = os.path.join(log_dir, "processing_order.log")
     
     # Determine number of processes to use
     if num_processes is None:
         num_processes = multiprocessing.cpu_count()
     num_processes = min(num_processes, multiprocessing.cpu_count(), total_cases)
     
-    logging.info(f"Starting processing of {total_cases} cases from {input_dir} using {num_processes} processes")
+    logging.info(f"Starting DYNAMIC PARALLEL processing of {total_cases} cases from {input_dir} using {num_processes} processes")
+    logging.info("Each CPU will process one case at a time, then pick up the next available case")
     
     # Create full case paths in sorted order
     case_paths = [os.path.join(input_dir, case_folder) for case_folder in sorted_case_folders]
     
+    # Write processing order information to separate log file
+    import datetime
+    with open(processing_order_log, 'w', encoding='utf-8') as order_file:
+        order_file.write("=" * 80 + "\n")
+        order_file.write("ORGAN SEGMENTATION POST-PROCESSING - PROCESSING ORDER LOG\n")
+        order_file.write("=" * 80 + "\n")
+        order_file.write(f"Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        order_file.write(f"Processing Mode: DYNAMIC PARALLEL (one case per CPU, dynamic assignment)\n")
+        order_file.write(f"Number of Processes: {num_processes}\n")
+        order_file.write(f"Input Directory: {input_dir}\n")
+        order_file.write(f"Output Directory: {output_dir if output_dir else 'Same as input (after_processing subdirs)'}\n")
+        order_file.write(f"Class Map: {class_map_name}\n")
+        order_file.write(f"Case List File: {case_list_file if case_list_file else 'None (processing all found cases)'}\n")
+        order_file.write("-" * 80 + "\n")
+        order_file.write(f"TOTAL CASES TO PROCESS: {total_cases}\n")
+        order_file.write("-" * 80 + "\n")
+        
+        # Write all discovered cases with better formatting
+        order_file.write(f"ALL DISCOVERED BDMAP CASES ({len(bdmap_cases)}):\n")
+        for i, (case_id, case_name) in enumerate(bdmap_cases, 1):
+            status = "SELECTED" if case_name in sorted_case_folders else "SKIPPED"
+            order_file.write(f"  {i:4d}. {case_name:<20} (ID: {case_id:<10}) - {status}\n")
+        
+        order_file.write("\n" + "-" * 80 + "\n")
+        order_file.write(f"CASES SCHEDULED FOR PROCESSING ({total_cases}):\n")
+        order_file.write("-" * 80 + "\n")
+        
+        for i, case_path in enumerate(case_paths, 1):
+            case_name = os.path.basename(case_path)
+            case_id = next((case_id for case_id, name in target_cases if name == case_name), "Unknown")
+            order_file.write(f"  {i:4d}. {case_name:<20} (ID: {case_id})\n")
+        
+        order_file.write("\n" + "-" * 80 + "\n")
+        order_file.write("PROCESSING RESULTS (updated in real-time):\n")
+        order_file.write("-" * 80 + "\n")
+    
+    # Record the cases to be processed (in console and main log)
+    logging.info("Cases to be processed (in order):")
+    for i, case_path in enumerate(case_paths, 1):
+        case_name = os.path.basename(case_path)
+        case_id = next((case_id for case_id, name in target_cases if name == case_name), "Unknown")
+        logging.info(f"  {i:3d}. {case_name} (ID: {case_id})")
+    
+    logging.info(f"Processing order details saved to: {processing_order_log}")
+    
     # Use partial to fix the output_dir and class_map_name parameters
     process_func = partial(process_case, output_dir=output_dir, class_map_name=class_map_name)
     
-    # Parallel processing using multiprocessing
+    # DYNAMIC PARALLEL PROCESSING using as_completed pattern
     try:
-        with multiprocessing.Pool(processes=num_processes) as pool:
-            results = pool.map(process_func, case_paths)
+        logging.info("Starting dynamic parallel processing...")
+        start_time = time.time()
+        
+        success_count = 0
+        failure_count = 0
+        completed_cases = {}  # Dictionary to track completed cases by case_name
+        
+        # Use ProcessPoolExecutor for better control
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        
+        with ProcessPoolExecutor(max_workers=num_processes) as executor:
+            # Submit all tasks and create a mapping from future to case info
+            future_to_case = {}
+            for i, case_path in enumerate(case_paths):
+                case_name = os.path.basename(case_path)
+                case_id = next((case_id for case_id, name in target_cases if name == case_name), "Unknown")
+                
+                future = executor.submit(process_func, case_path)
+                future_to_case[future] = {
+                    'index': i + 1,
+                    'case_name': case_name,
+                    'case_id': case_id,
+                    'case_path': case_path
+                }
+            
+            logging.info(f"Submitted {len(future_to_case)} tasks to {num_processes} workers")
+            logging.info("Workers will pick up cases dynamically as they complete previous ones")
+            
+            # Process results as they complete (not in order)
+            for future in as_completed(future_to_case):
+                case_info = future_to_case[future]
+                case_name = case_info['case_name']
+                case_id = case_info['case_id']
+                case_index = case_info['index']
+                
+                try:
+                    success, message = future.result()
+                    
+                    completed_cases[case_name] = {
+                        'index': case_index,
+                        'case_name': case_name,
+                        'case_id': case_id,
+                        'success': success,
+                        'message': message
+                    }
+                    
+                    if success:
+                        success_count += 1
+                        logging.info(f"✓ [{success_count + failure_count:3d}/{total_cases}] {case_name} (ID: {case_id}) - {message}")
+                    else:
+                        failure_count += 1
+                        logging.error(f"✗ [{success_count + failure_count:3d}/{total_cases}] {case_name} (ID: {case_id}) - {message}")
+                    
+                    # Update processing order log immediately
+                    with open(processing_order_log, 'a', encoding='utf-8') as order_file:
+                        status_symbol = "✓" if success else "✗"
+                        status_text = "SUCCESS" if success else "FAILED"
+                        completion_time = datetime.datetime.now().strftime('%H:%M:%S')
+                        order_file.write(f"  {case_index:4d}. {status_symbol} {case_name:<20} (ID: {case_id:<10}) - {status_text} [{completion_time}]\n")
+                        order_file.write(f"       {message}\n")
+                    
+                    # Show progress
+                    completed = success_count + failure_count
+                    logging.info(f"Progress: {completed}/{total_cases} completed ({completed/total_cases*100:.1f}%), Success: {success_count}, Failed: {failure_count}")
+                    
+                except Exception as e:
+                    failure_count += 1
+                    error_message = f"{case_name} processing exception: {str(e)}"
+                    logging.error(f"✗ [{success_count + failure_count:3d}/{total_cases}] {error_message}")
+                    
+                    completed_cases[case_name] = {
+                        'index': case_index,
+                        'case_name': case_name,
+                        'case_id': case_id,
+                        'success': False,
+                        'message': error_message
+                    }
+                    
+                    # Update processing order log immediately
+                    with open(processing_order_log, 'a', encoding='utf-8') as order_file:
+                        completion_time = datetime.datetime.now().strftime('%H:%M:%S')
+                        order_file.write(f"  {case_index:4d}. ✗ {case_name:<20} (ID: {case_id:<10}) - EXCEPTION [{completion_time}]\n")
+                        order_file.write(f"       {error_message}\n")
+        
+        end_time = time.time()
+        total_processing_time = end_time - start_time
+        logging.info(f"Dynamic parallel processing completed in {total_processing_time:.2f} seconds")
+        
     except KeyboardInterrupt:
         logging.error("Processing interrupted by user")
         # Remove log file handler
@@ -1205,18 +1396,57 @@ def process_all_cases(input_dir, output_dir=None, num_processes=None, case_list_
         file_handler.close()
         return
     
-    # Process results
-    success_count = sum(1 for success, _ in results if success)
-    failure_count = total_cases - success_count
-    
-    # Log details of each case
-    for success, message in results:
-        if success:
-            logging.info(message)
+    # Sort completed cases by original index for final summary
+    results_details = []
+    for case_name in sorted_case_folders:
+        if case_name in completed_cases:
+            results_details.append(completed_cases[case_name])
         else:
-            logging.error(message)
+            # This shouldn't happen, but just in case
+            case_id = next((case_id for case_id, name in target_cases if name == case_name), "Unknown")
+            results_details.append({
+                'index': len(results_details) + 1,
+                'case_name': case_name,
+                'case_id': case_id,
+                'success': False,
+                'message': f"{case_name} - Not processed (unknown error)"
+            })
     
+    # Update processing order log with final summary
+    with open(processing_order_log, 'a', encoding='utf-8') as order_file:
+        order_file.write("\n" + "=" * 80 + "\n")
+        order_file.write("PROCESSING SUMMARY:\n")
+        order_file.write("=" * 80 + "\n")
+        order_file.write(f"Processing Mode: DYNAMIC PARALLEL\n")
+        order_file.write(f"Number of Workers: {num_processes}\n")
+        order_file.write(f"Total Cases: {total_cases}\n")
+        order_file.write(f"Successful: {success_count} ({success_count/total_cases*100:.1f}%)\n")
+        order_file.write(f"Failed: {failure_count} ({failure_count/total_cases*100:.1f}%)\n")
+        order_file.write(f"Total Processing Time: {total_processing_time:.2f} seconds\n")
+        order_file.write(f"Average Time per Case: {total_processing_time/total_cases:.2f} seconds\n")
+        order_file.write(f"Completion Time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        
+        if failure_count > 0:
+            order_file.write("\nFAILED CASES:\n")
+            order_file.write("-" * 40 + "\n")
+            for result in results_details:
+                if not result['success']:
+                    order_file.write(f"  {result['case_name']} (ID: {result['case_id']}): {result['message']}\n")
+    
+    # Final Summary
+    logging.info("=" * 60)
+    logging.info("DYNAMIC PARALLEL PROCESSING COMPLETE")
+    logging.info("=" * 60)
     logging.info(f"Processing complete. Total: {total_cases}, Success: {success_count}, Failure: {failure_count}")
+    logging.info(f"Total processing time: {total_processing_time:.2f} seconds")
+    logging.info(f"Average time per case: {total_processing_time/total_cases:.2f} seconds")
+    
+    if success_count > 0:
+        logging.info(f"Successfully processed cases: {success_count}/{total_cases} ({success_count/total_cases*100:.1f}%)")
+    if failure_count > 0:
+        logging.warning(f"Failed cases: {failure_count}/{total_cases} ({failure_count/total_cases*100:.1f}%)")
+    
+    logging.info(f"Detailed processing order and results saved to: {processing_order_log}")
     
     # Remove summary log file handler
     logging.getLogger().removeHandler(file_handler)
@@ -1232,7 +1462,7 @@ def parse_arguments():
     parser.add_argument("--processes", "-p", type=int, required=False, default=None,
                         help="Number of processes to use (default: number of CPU cores)")
     parser.add_argument("--case_list", "-c", type=str, required=False, default=None,
-                        help="Path to txt file containing case names to process (one per line). If not specified, processes all BDMAP cases found in input directory")
+                        help="Path to txt file containing case names to process (one per line). If not specified, processes BDMAP_00000001 to BDMAP_00001000")
     parser.add_argument("--class_map", "-m", type=str, required=False, default="all",
                         choices=list(available_class_maps.keys()),
                         help="Class map to use for processing (default: all)")
@@ -1259,14 +1489,7 @@ if __name__ == "__main__":
     if case_list_file:
         logging.info(f"Case list file: {case_list_file}")
     else:
-        logging.info(f"Target: All BDMAP cases found in input directory")
-    
-    process_all_cases(input_dir, output_dir, num_processes, case_list_file, class_map_name)
-    logging.info("Post-processing complete")
-    if case_list_file:
-        logging.info(f"Case list file: {case_list_file}")
-    else:
-        logging.info(f"Target range: BDMAP_00000001 to BDMAP_00001000")
+        logging.info(f"Processing all BDMAP cases found in directory")
     
     process_all_cases(input_dir, output_dir, num_processes, case_list_file, class_map_name)
     logging.info("Post-processing complete")
