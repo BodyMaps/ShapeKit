@@ -2,7 +2,9 @@ import json
 import logging
 import multiprocessing
 import shutil
+from functools import partial
 from pathlib import Path
+from tqdm import tqdm
 from typing import Dict, List, Tuple, Optional, Union
 
 import cc3d
@@ -23,11 +25,10 @@ from scipy.ndimage import (
 from scipy.spatial import KDTree
 
 from class_maps import class_maps_supported
-from utils import Settings, MaskCropper
+from utils import Settings, MaskCropper, init_logger
 
-# To avoid cluttering the output, keep the logging level as INFO
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+init_logger()
 
 intermediate_axcodes = ("R", "A", "S")
 
@@ -637,6 +638,8 @@ class OrganRectifier:
             )
 
             ref_bounds["z_lb"] = min(liver_top, spleen_top, stomach_top)
+        # elif target_label in range(34, 58):
+        #     ...
         else:
             logger.debug(
                 f"No pre-defined reference bounds for {class_maps_supported[target_label]}"
@@ -707,7 +710,7 @@ class OrganRectifier:
             )
         elif num_comps == 1:
             logger.debug(
-                f"Label {class_maps_supported[target_label]} has only one component."
+                f"Label {class_maps_supported[target_label]} has only one component. Skipping."
             )
 
         return labeled_comps, num_comps
@@ -1020,7 +1023,7 @@ def remove_small_components(
     return seg_masks
 
 
-def process_organs(data_inputs, debug=False):
+def process_organs(data_inputs):
     """
     Assumtion: liver, spleen, stomach, kidneys, aorta/postcava must exist in the class map.
     Flow chart:
@@ -1029,7 +1032,7 @@ def process_organs(data_inputs, debug=False):
     name2label_supported = {name: label for label, name in class_maps_supported.items()}
 
     source_dir, target_dir, save_combined_labels = data_inputs
-    logger.info(f"Processing {source_dir.name}")
+    logger.debug(f"Processing {source_dir.name}")
 
     seg_files = list((source_dir / "segmentations").glob("*.nii.gz"))
     seg_masks = {}
@@ -1126,10 +1129,6 @@ def process_organs(data_inputs, debug=False):
 
     # deal with the rest of the organs
     logger.debug("Processing other organs")
-    if debug:
-        from tqdm import tqdm
-
-        class_list = tqdm(class_list)
     for label in class_list:
         try:
             # remove out of bounds components
@@ -1244,12 +1243,11 @@ def process_organs(data_inputs, debug=False):
     if (source_dir / "ct.nii.gz").exists():
         shutil.copy(source_dir / "ct.nii.gz", target_dir / "ct.nii.gz")
 
-    logger.info(f"Finished processing {source_dir.name}")
+    logger.debug(f"Finished processing {source_dir.name}")
 
 
 if __name__ == "__main__":
     args = auto_cli(Settings)
-
     source_dir = Path(args.input_folder)
     target_dir = Path(args.output_folder)
     cpu_count = args.cpu_count
@@ -1274,21 +1272,24 @@ if __name__ == "__main__":
     if cpu_count > 1:
         cpu_count = min(cpu_count, len(data_inputs))
         logger.info(f"Start post-processing with {cpu_count} jobs")
-        with multiprocessing.Pool(cpu_count) as pool:
-            pool.map(process_organs, data_inputs)
+        logger_initializer = partial(init_logger, verbose=args.verbose)
+        with multiprocessing.Pool(cpu_count, initializer=logger_initializer) as pool:
+            results = pool.imap_unordered(process_organs, data_inputs)
+            for _ in tqdm(results, total=len(data_inputs), desc="Processing"):
+                pass  # We only care about the progress
     else:
         logger.warning(
             "This is for debugging purpose. Please use multiprocessing (i.e., set cpu_count > 1) if you are processing a large number of files."
         )
         for i in data_inputs:
-            if "BDMAP_00001000" in i[0].name:
+            if "BDMAP_00000001" in i[0].name:
                 from time import time
 
                 start = time()
-                process_organs(i, debug=True)
+                process_organs(i)
                 end = time()
                 logger.info(
                     f"Processing time for {i[0].name}: {end - start:.2f} seconds"
                 )
                 break
-    logger.info("Finished postprocessing")
+    logger.info("Finish post-processing")

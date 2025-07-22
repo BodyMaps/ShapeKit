@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 
 
@@ -10,6 +12,7 @@ class Settings:
         start_idx: int = 0,
         end_idx: int = -1,
         save_combined_labels: bool = False,
+        verbose: bool = False,
     ):
         """
         Postprocessing abdominal CT masks.
@@ -21,6 +24,7 @@ class Settings:
             start_idx: Start index (inclusive) for selecting a subset of source directories.
             end_idx: End index (exclusive) for selecting a subset of source directories. If -1, all files after start index (inclusive) are processed.
             save_combined_labels: If True, saves the combined labels in the output folder.
+            verbose: If True, prints additional information during processing. Otherwise, only progress bar is shown.
         """
         # sanity checks
         assert input_folder is not None, "input_folder must be specified"
@@ -34,6 +38,7 @@ class Settings:
         assert isinstance(
             save_combined_labels, bool
         ), "save_combined_labels must be a boolean value"
+        assert isinstance(verbose, bool), "verbose must be a boolean value"
 
         self.input_folder = input_folder
         self.output_folder = output_folder
@@ -41,6 +46,7 @@ class Settings:
         self.start_idx = start_idx
         self.end_idx = end_idx
         self.save_combined_labels = save_combined_labels
+        self.verbose = verbose
 
 
 class MaskCropper:
@@ -81,3 +87,19 @@ class MaskCropper:
             full_mask[z_min:z_max, y_min:y_max, x_min:x_max] = mask
             seg_mask[label] = full_mask
         return seg_mask
+
+
+def init_logger(verbose: bool = False):
+    logger = logging.getLogger()
+    level = logging.DEBUG if verbose else logging.INFO
+    logger.setLevel(level)
+
+    logger.handlers.clear()
+    handler = logging.StreamHandler()
+    handler.setLevel(level)
+    formatter = logging.Formatter(
+        fmt="%(asctime)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)

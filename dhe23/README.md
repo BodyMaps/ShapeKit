@@ -27,12 +27,6 @@ Supported Class Map
 A list of supported organs is available in class_maps.py. Please refer to that file for details. Please make sure the organ name of your segmentation file is exactly the same with the supported organ name.
 
 ------------------------------
-Multiprocessing
-------------------------------
-
-Use ``--cpu_count`` to enable multiprocessing. For example, setting ``--cpu_count 5`` will use 5 parallel processes. You can adjust this depending on your CPU count.
-
-------------------------------
 Example Commands
 ------------------------------
 
@@ -61,6 +55,14 @@ or run the following commands to post-process different datasets:
     python -W ignore main.py --input_folder data/AbdomenAtlasPro --output_folder outputs --cpu_count 64
 
     python main.py --input_folder data --output_folder outputs --cpu_count 1
+
+------------------------------
+Logging
+------------------------------
+
+By default, ``verbose`` is set to ``False``, and only the progress bar is shown. Since the order of logging messages in multiprocessing is not guaranteed, this helps reduce messy and interleaved outputs from concurrent processes.
+
+If you want to see detailed logging for each organ being processed, you can set verbose to True.
 
 ------------------------------
 Requirements
