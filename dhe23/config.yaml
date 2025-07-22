@@ -6,3 +6,7 @@ start_idx: 0
 end_idx: -1
 
 save_combined_labels: false
+
+# Since the order of logging messages in multiprocessing is not guaranteed,
+# set verbose to False to reduce messy and interleaved outputs from concurrent processes
+verbose: false
