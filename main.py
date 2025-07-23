@@ -1,8 +1,8 @@
 import argparse
 import multiprocessing
 from multiprocessing import cpu_count
-from organs_postprocessing import *
-from vertebrae_postprocessing import postprocessing_vertebrae
+from utils.organs_postprocessing import *
+from utils.vertebrae_postprocessing import postprocessing_vertebrae
 import logging
 import yaml
 import traceback

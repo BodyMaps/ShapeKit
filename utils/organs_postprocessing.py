@@ -1,4 +1,4 @@
-from utils import *
+from utils.utils import *
 
 
 with open('config.yaml', 'r') as f:
@@ -192,12 +192,12 @@ def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, refe
 
     reference_mask = segmentation_dict.get(reference)
     reversed_z = True
-    print(f"[INFO] Checking {organ_name}...")
+    print(f"[INFO] (Organ Location Check Module) Checking {organ_name}...")
 
     try:
         z_limit = np.mean(np.argwhere(reference_mask)[:, AXIS_Z])
     except:
-        print(f"[INFO] Organ location check failed with {reference}, now try liver")
+        print(f"[INFO] (Organ Location Check Module) Organ location check failed with {reference}, now try liver")
         reference_mask = segmentation_dict.get('liver')
 
         try:
@@ -220,7 +220,7 @@ def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, refe
 
     removed_voxels = np.sum(organ_mask) - np.sum(corrected_organ_mask)
     if removed_voxels > 0:
-        print(f"[INFO] Removed {removed_voxels} invalid {organ_name} voxels above reference {reference}")
+        print(f"[INFO] (Organ Location Check Module) Removed {removed_voxels} invalid {organ_name} voxels above reference {reference}")
 
     return corrected_organ_mask
 
@@ -339,12 +339,11 @@ def dongli_lung_constraints(segmentation_dict, axis_map,
         segmentation_dict.get('kidney_left', 0) |
         segmentation_dict.get('kidney_right', 0)  |
         segmentation_dict.get('spleen', 0) |
-        segmentation_dict.get('colon', 0) |
-        segmentation_dict.get('intestine', 0)  
+        segmentation_dict.get('colon', 0) 
     ).astype(np.uint8)
 
     if not np.any(reference_mask):
-        print(f"[INFO] Reference organs not found for {target_label}. Skipping.")
+        print(f"[INFO] (Lung Check Module) Reference organs not found for {target_label}. Skipping.")
         return segmentation_dict
 
 
@@ -366,8 +365,13 @@ def dongli_lung_constraints(segmentation_dict, axis_map,
 
         if z_max < z_lower_bound:
             fallback_mask[tuple(coords.T)] = 1
-            print(f"[INFO] Reassigned {target_label} component to {fallback_label}")
+            print(f"[INFO] (Lung Check Module) Reassigned {target_label} component to {fallback_label}")
         else:
+            # double check with IoU
+            IoU_check = lung_mask & reference_mask
+            if np.sum(IoU_check) > 0.8 * np.sum(cc_map == cc_id):
+                fallback_mask[tuple(coords.T)] = 1
+                print(f"[INFO] (Lung Check Module) Reassigned {target_label} component to {fallback_label}")
             new_lung_mask[cc_map == cc_id] = 1
 
 
@@ -402,13 +406,15 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
     if np.sum(segmentation_dict_new.get('lung_left')) == 0 and np.sum(segmentation_dict_new.get('lung_right')) == 0 :
         colon_mask = segmentation_dict_new.get('colon')
         liver_mask = segmentation_dict_new.get('liver')
+
         Z = axis_map['z']
         colon_z = np.where(colon_mask)[Z]
         liver_z = np.where(liver_mask)[Z]
+
         z_check_bound = np.mean(colon_z)
         z_liver = np.mean(liver_z)
         if z_liver < z_check_bound:
-            print("[INFO] Ineffective lung reassignment, fall back ...")
+            print("[INFO] Ineffective lung reassignment found, fall back ...")
             
             del segmentation_dict_new
             gc.collect()
@@ -423,7 +429,7 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
     lung_right = segmentation_dict.get("lung_right", None)
 
     if lung_left is None or lung_right is None:
-        print("[WARNING] Missing lung_left or lung_right in segmentation_dict.")
+        print("[WARNING] (Lung Check Module) Missing lung_left or lung_right in segmentation_dict.")
         return segmentation_dict
 
     lung_mask = ((lung_left > 0) | (lung_right > 0)).astype(np.uint16)
@@ -432,9 +438,9 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
 
     # If lung got fully reassigned
     if np.sum(lung_mask) == 0:
-        print("[INFO] No valid lung remaining after reassignment. Skipping lung post-processing.")
-        segmentation_dict['lung_left'] = np.zeros_like(lung_mask, dtype=np.uint8)
-        segmentation_dict['lung_right'] = np.zeros_like(lung_mask, dtype=np.uint8)
+        print("[INFO] (Lung Check Module) No valid lung remaining after reassignment. Skip lung post-processing ...")
+        segmentation_dict.pop('lung_left')
+        segmentation_dict.pop('lung_right')
         return segmentation_dict
 
     # Split left and right lungs
@@ -452,10 +458,6 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
         left_mask,
         liver_mask=calibration_standards_mask
     )
-
-    # Clean small artifacts
-    right_mask = remove_small_components(right_mask, threshold=np.sum(right_mask) / 10)
-    left_mask = remove_small_components(left_mask, threshold=np.sum(left_mask) / 10)
 
     # Update dict
     segmentation_dict['lung_left'] = left_mask
