@@ -1023,11 +1023,17 @@ def remove_small_components(
     return seg_masks
 
 
-def process_organs(data_inputs):
+def process_organs(data_inputs) -> bool:
     """
     Assumtion: liver, spleen, stomach, kidneys, aorta/postcava must exist in the class map.
     Flow chart:
     aorta/postcava -> left-right labels -> other organs -> supress non-largest components
+    Args:
+        data_inputs (tuple): A tuple containing the source directory, target directory, and a boolean
+            indicating whether to save combined labels.
+    Returns:
+        bool: True if processing was successful, False if no valid segmentation files were found.
+            
     """
     name2label_supported = {name: label for label, name in class_maps_supported.items()}
 
@@ -1051,7 +1057,7 @@ def process_organs(data_inputs):
         logger.error(
             f"No valid segmentation files found in {source_dir.name}. Skipping."
         )
-        return
+        return False
 
     # standarize orientation
     logger.debug("Standardizing orientation")
@@ -1245,6 +1251,8 @@ def process_organs(data_inputs):
 
     logger.debug(f"Finished processing {source_dir.name}")
 
+    return True
+
 
 if __name__ == "__main__":
     args = auto_cli(Settings)
@@ -1273,10 +1281,15 @@ if __name__ == "__main__":
         cpu_count = min(cpu_count, len(data_inputs))
         logger.info(f"Start post-processing with {cpu_count} jobs")
         logger_initializer = partial(init_logger, verbose=args.verbose)
+
+        success_count = 0
         with multiprocessing.Pool(cpu_count, initializer=logger_initializer) as pool:
             results = pool.imap_unordered(process_organs, data_inputs)
-            for _ in tqdm(results, total=len(data_inputs), desc="Processing"):
-                pass  # We only care about the progress
+            for result in tqdm(results, total=len(data_inputs), desc="Processing"):
+                success_count += result
+            skip_count = len(data_inputs) - success_count
+        logger.info(f"Post-processing summary:\n\t\t      {success_count} cases succeeded.\n\t\t      {skip_count} cases skipped due to either missing segmentation files or no supported organs.")
+
     else:
         logger.warning(
             "This is for debugging purpose. Please use multiprocessing (i.e., set cpu_count > 1) if you are processing a large number of files."
@@ -1292,4 +1305,3 @@ if __name__ == "__main__":
                     f"Processing time for {i[0].name}: {end - start:.2f} seconds"
                 )
                 break
-    logger.info("Finish post-processing")

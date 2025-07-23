@@ -70,7 +70,7 @@ Requirements
 
 - Python 3.9 or higher
 
-To install dependencies (if requirements.txt is available):
+To install dependencies:
 
     pip install -r requirements.txt
 
