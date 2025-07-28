@@ -116,7 +116,6 @@ def main(input_path, input_folder_name, output_path=None):
     # combine later as calibration reference
     segmentation = combine_segmentation_dict(segmentation_dict, class_map)
     
-    # print("[RANDOM] Yay")
     # process
     postprocessed_segmentation_dict = process_organs(
         segmentation_dict, 
@@ -139,7 +138,6 @@ def main(input_path, input_folder_name, output_path=None):
     # free up memories
     del img
     del segmentation_dict
-
     del segmentation
     del postprocessed_segmentation_dict
     gc.collect()
