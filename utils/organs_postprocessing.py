@@ -101,7 +101,7 @@ def post_processing_colon_intestine(segmentation_dict):
         cleaned_intestine_mask = remove_small_components(intestine_mask, threshold=np.sum(intestine_mask)/10)
         segmentation_dict['intestine'] = cleaned_intestine_mask
     except:
-        print("[INFO] Intestine does not exist, skipped ...")
+        print("[INFO] (Colon-Intestine Check Module) Intestine does not exist, skipped ...")
     return segmentation_dict
 
 
@@ -318,7 +318,7 @@ def post_processing_kidney(segmentation_dict: dict, axis_map: dict, calibration_
 # the biggest problem is here, how to deal with the extreme-shape problem with lung?
 
 def dongli_lung_constraints(segmentation_dict, axis_map, 
-                              target_label: str = 'lung_left', fallback_label: str = 'colon', min_size: int = 50):
+                              target_label: str = 'lung_left', fallback_label: str = 'colon', min_size: int = 50, overlap_check_threshold: float=0.8):
     """
     @ Dongli He 
 
@@ -339,7 +339,8 @@ def dongli_lung_constraints(segmentation_dict, axis_map,
         segmentation_dict.get('kidney_left', 0) |
         segmentation_dict.get('kidney_right', 0)  |
         segmentation_dict.get('spleen', 0) |
-        segmentation_dict.get('colon', 0) 
+        segmentation_dict.get('colon', 0) |
+        segmentation_dict.get('intestine', 0) 
     ).astype(np.uint8)
 
     if not np.any(reference_mask):
@@ -367,12 +368,16 @@ def dongli_lung_constraints(segmentation_dict, axis_map,
             fallback_mask[tuple(coords.T)] = 1
             print(f"[INFO] (Lung Check Module) Reassigned {target_label} component to {fallback_label}")
         else:
-            # double check with IoU
-            IoU_check = lung_mask & reference_mask
-            if np.sum(IoU_check) > 0.8 * np.sum(cc_map == cc_id):
+            # double check with overlap ratio
+            temp_mask = cc_map == cc_id
+            overlap_check = np.sum(temp_mask & reference_mask) / np.sum(temp_mask)
+            
+            if overlap_check > overlap_check_threshold:
                 fallback_mask[tuple(coords.T)] = 1
                 print(f"[INFO] (Lung Check Module) Reassigned {target_label} component to {fallback_label}")
-            new_lung_mask[cc_map == cc_id] = 1
+            else:
+                # permitted
+                new_lung_mask[cc_map == cc_id] = 1
 
 
     segmentation_dict[target_label] = new_lung_mask
@@ -414,15 +419,15 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
         z_check_bound = np.mean(colon_z)
         z_liver = np.mean(liver_z)
         if z_liver < z_check_bound:
-            print("[INFO] Ineffective lung reassignment found, fall back ...")
-            
+            print("[INFO] (Lung Check Module) Ineffective lung reassignment found, fall back ...")
             del segmentation_dict_new
             gc.collect()
         else:
-            del segmentation_dict  # old version no longer needed
-            gc.collect()
+            print("[INFO] (Lung Check Module) No valid lung remaining after reassignment. Skip lung post-processing ...")
+            return segmentation_dict_new
             segmentation_dict = segmentation_dict_new
     else:
+        # continues
         segmentation_dict = segmentation_dict_new
 
     lung_left = segmentation_dict.get("lung_left", None)
@@ -433,15 +438,8 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
         return segmentation_dict
 
     lung_mask = ((lung_left > 0) | (lung_right > 0)).astype(np.uint16)
+    
     lung_mask = suppress_non_largest_components_binary(lung_mask, keep_top=2)
-
-
-    # If lung got fully reassigned
-    if np.sum(lung_mask) == 0:
-        print("[INFO] (Lung Check Module) No valid lung remaining after reassignment. Skip lung post-processing ...")
-        segmentation_dict.pop('lung_left')
-        segmentation_dict.pop('lung_right')
-        return segmentation_dict
 
     # Split left and right lungs
     right_mask, left_mask = split_right_left(lung_mask, AXIS=axis_map['x'])
@@ -449,7 +447,7 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
     # Fallback split if unbalanced
     volume_ratio = np.sum(right_mask) / (np.sum(left_mask) + 1e-5)
     if volume_ratio > 2 or volume_ratio < 0.5:
-        print("[INFO] Unbalanced lung split detected. Using fallback split_organ().")
+        print("[INFO] (Lung Check Module) Unbalanced lung split detected. Using fallback split_organ().")
         right_mask, left_mask = split_organ(mask=lung_mask, axis=axis_map['x'])
 
     # Align left/right assignment based on liver position
@@ -617,7 +615,7 @@ def reassign_false_positives(segmentation_dict: dict, organ_adjacency_map: dict,
                 if adj_organ not in segmentation_dict:
                     segmentation_dict[adj_organ] = np.zeros_like(mask, dtype=bool)
                 segmentation_dict[adj_organ][cc_mask] = True
-                print(f"[INFO] Reassigned component from {organ} → {adj_organ}")
+                print(f"[INFO] (FP Check Module) Reassigned component from {organ} → {adj_organ}")
             else:
                 updated_mask[cc_mask] = True
             
