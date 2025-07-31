@@ -13,8 +13,8 @@
     ```
 
 2. `class_map`: the label mapping dict of organ and their labels.
-    > [!IMPORTANT]
-    > All organs on this list will be read and loaded, but only the ones listed in target_organs will be processed by ShapeKit.
+> [!IMPORTANT]
+> All organs on this list will be read and loaded, but only the ones listed in target_organs will be processed by ShapeKit.
 
 3. `target_organs`: the organs selected for postprocessing. 
 
