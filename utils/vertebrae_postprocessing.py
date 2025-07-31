@@ -448,37 +448,27 @@ def postprocessing_vertebrae(segmentation_dict: dict):
         3. Fill holes within vertebrae volumes
     """
 
-    # Step 1: Stack all vertebrae segmentations into a single 3D array
-    vertebrae_labels = [key for key in segmentation_dict if key.startswith('vertebrae_')]
-    print(vertebrae_labels)
-    if len(vertebrae_labels) == 0:
-        print("[INFO] (Vertebrae Module) Vertebraes not found, skipping ...")
-        return segmentation_dict
-    
+    # TODO WARNING fixing .... reallocate_based_on_size()
     vertebrae_segmentations = np.zeros_like(next(iter(segmentation_dict.values())), dtype=np.uint8)
-    for idx, vertebra_name in enumerate(sorted(vertebrae_labels), start=1):
-        
-        # NOTE !! the starting index
-        idx += 26
+
+    # Assign fixed anatomical label IDs
+    for label_id, vertebra_name in all_labels.items():
+        if vertebra_name not in segmentation_dict:
+            print(f"[INFO] Missing: {vertebra_name}, skipping...")
+            continue
         mask = segmentation_dict[vertebra_name]
-        vertebrae_segmentations[mask > 0] = idx  # Assign unique label per vertebra, and initial
+        vertebrae_segmentations[mask > 0] = label_id
 
-    # Reallocate labels based on size
-    segmentation = reallocate_based_on_size(vertebrae_segmentations)
-    segmentation = spine_adjacent_pairs(segmentation, voxel_supression_threshold=100)
-
-    # Suppress non-largest components (remove noise)
-    segmentation = supress_non_largest_components(np.array(segmentation))
-
-    # Fill internal holes
+    # Post-processing
+    # reallocate_based_on_size(), right now fixing.... still not stable
+    segmentation = spine_adjacent_pairs(vertebrae_segmentations, voxel_supression_threshold=1e3)
+    segmentation = supress_non_largest_components(segmentation)
     segmentation = fill(segmentation)
 
-    # Split back into individual vertebrae masks
-    processed_dict = segmentation_dict
-    for label_id in np.unique(segmentation):
-        if label_id == 0:
-            continue
-        vertebra_name = vertebrae_labels[label_id - 1]
-        processed_dict[vertebra_name] = (segmentation == label_id).astype(np.uint8)
+    # Split back into vertebrae masks
+    processed_dict = segmentation_dict.copy()
+    for label_id, vertebra_name in all_labels.items():
+        if np.any(segmentation == label_id):
+            processed_dict[vertebra_name] = (segmentation == label_id).astype(np.uint8)
 
     return processed_dict
