@@ -62,18 +62,19 @@ def fill_holes(mask):
 
 
 def fill(segmentation):
-
+    """
+    Fill the small holes inside vertebrae structure
+    """
     replace_segmentation = np.zeros_like(segmentation)
-
     unique_labels = np.unique(segmentation)
-    for label_id in tqdm(unique_labels, desc='[INFO] Fill holes'):
+    for label_id in unique_labels:
         if label_id == 0:
             continue
 
         mask = (segmentation == label_id).astype(int)  
         mask = fill_holes(mask)
-
         replace_segmentation[mask] = label_id
+
     return replace_segmentation
 
 
@@ -112,7 +113,7 @@ def split_overmerged_triplets(merged_segmentation, size_dict, label_z_centers, c
             for voxel in coords_lower:
                 merged_segmentation[tuple(voxel)] = next_new_label  # assign new label
 
-            print(f"[INFO] Label {i0} was too large → split into {i0} (upper) + {next_new_label} (lower)")
+            print(f"[INFO]  (Vertebrae Module) Label {i0} was too large → split into {i0} (upper) + {next_new_label} (lower)")
 
             # Update label dictionaries
             size_dict[i0] = len(coords_upper)
@@ -158,7 +159,7 @@ def relabel_by_z_order(segmentation, label_z_centers, start_label=1):
         label_mapping[old_id] = new_id
         new_label_z_centers[new_id] = z_center  # keep the same z_center, but update label key
 
-    print(f"[INFO] Relabeled {len(label_mapping)} labels from Z-bottom to Z-top.")
+    print(f"[INFO]  (Vertebrae Module) Relabeled {len(label_mapping)} labels from Z-bottom to Z-top.")
     return new_segmentation, new_label_z_centers
 
 
@@ -215,13 +216,13 @@ def reallocate_based_on_size(segmentation):
     size_dict = {}
     label_z_centers = {}
     unique_labels = np.unique(segmentation)
-    for label_id in tqdm(unique_labels, desc="[INFO] Calculation size of each label after removing artifacts"):
+    print(unique_labels)
+    for label_id in unique_labels:
         if label_id == 0:
             continue
-
+        label_id += 26 # NOTE set the starting index
         mask = segmentation == label_id
         mask = remove_small_components(mask, threshold=np.sum(mask)/10) 
-        # mask = fill_holes(mask)
 
         coords = np.argwhere(mask)
         if coords.shape[0] == 0:
@@ -259,7 +260,7 @@ def reallocate_based_on_size(segmentation):
                     min_dist = dist
                     nearest_label = other_id
 
-            print(f"[INFO] Label {label_id} merged into {nearest_label}")
+            print(f"[INFO] (Vertebrae Module) Label {label_id} merged into {nearest_label}")
             merged_segmentation[merged_segmentation == label_id] = nearest_label
 
             size_dict[nearest_label] += size_dict[label_id]
@@ -268,7 +269,7 @@ def reallocate_based_on_size(segmentation):
         
 
     # Step 3: Find the unusual large one and split into 2 parts, forming new label
-    print(f"[INFO] Total {split_counter} splits need to be made")
+    print(f"[INFO] (Vertebrae Module) Total {split_counter} splits need to be made")
     # now we examine the remaining labels we use triplet. i-2, i-1. i. when i is larger than the 1.5*min(size(i-2), size(i-1)), then need split
     split_segmentation, label_z_centers = split_overmerged_triplets(
         merged_segmentation, 
@@ -277,7 +278,7 @@ def reallocate_based_on_size(segmentation):
         counter= split_counter,
         size_threshold_ratio=1.5)
 
-    print("New Z-centers locations:", label_z_centers)
+    # print("New Z-centers locations:", label_z_centers)
 
     # Step 4: Re-schedule the label
     new_segmentation, label_z_centers = relabel_by_z_order(split_segmentation, label_z_centers)
@@ -363,7 +364,7 @@ def spine_adjacent_pairs(img, voxel_supression_threshold=10, default_val=0):
             triplets.append((labels[l-1], labels[l]))
     
     for idx, triplet in enumerate(triplets):
-        print(f"[INFO] Processing triplet no. {idx}/{len(triplets)}")
+        # print(f"[INFO] Processing triplet no. {idx}/{len(triplets)}")
         #Seperately handel first and last triplet
         if idx==0 or idx==len(triplets)-1:
             current, below = triplet
@@ -424,7 +425,7 @@ def supress_non_largest_components(img, default_val = 0):
     new_background = np.zeros(img.shape, dtype=np.bool_)
     for name, label in all_labels.items():
 
-            print(f"[INFO] Now processing supress non largest cc on {label}")
+            # print(f"[INFO] Now processing supress non largest cc on {label}")
             label_cc = cc3d.connected_components(img == name, connectivity=6)
             uv, uc = np.unique(label_cc, return_counts=True)
             dominant_vals = uv[np.argsort(uc)[::-1][:2]]
@@ -450,13 +451,13 @@ def postprocessing_vertebrae(segmentation_dict: dict):
     # Step 1: Stack all vertebrae segmentations into a single 3D array
     vertebrae_labels = [key for key in segmentation_dict if key.startswith('vertebrae_')]
     if len(vertebrae_labels) == 0:
-        print("[INFO] Vertebraes not found, skipping ...")
+        print("[INFO] (Vertebrae Module) Vertebraes not found, skipping ...")
         return segmentation_dict
     
     vertebrae_segmentations = np.zeros_like(next(iter(segmentation_dict.values())), dtype=np.uint8)
     for idx, vertebra_name in enumerate(sorted(vertebrae_labels), start=1):
         mask = segmentation_dict[vertebra_name]
-        vertebrae_segmentations[mask > 0] = idx  # Assign unique label per vertebra
+        vertebrae_segmentations[mask > 0] = idx  # Assign unique label per vertebra, and initial
 
     # Reallocate labels based on size
     segmentation = reallocate_based_on_size(vertebrae_segmentations)

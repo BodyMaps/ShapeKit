@@ -658,12 +658,15 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
         combined = np.zeros(shape, dtype=np.uint8)
 
         for idx, organ in sorted(class_map.items()):
-            organ_path = os.path.join(seg_folder, f"{organ}.nii.gz")
-            if not os.path.exists(organ_path):
+            try:
+                organ_path = os.path.join(seg_folder, f"{organ}.nii.gz")
+                if not os.path.exists(organ_path):
+                    continue
+                mask = nib.load(organ_path).get_fdata().astype(bool)
+                combined[mask] = idx
+                del mask  # free memory
+            except:# if some masks are null and therefore deleted, skip
                 continue
-            mask = nib.load(organ_path).get_fdata().astype(bool)
-            combined[mask] = idx
-            del mask  # free memory
 
         # Save combined label map
         nib.save(
