@@ -45,7 +45,7 @@ Junqi Liu*, Dongli He*, [Wenxuan Li](https://scholar.google.com/citations?hl=en&
 <a href='https://www.zongweiz.com/dataset'><img src='https://img.shields.io/badge/Project-Page-Green'></a> <a href='https://www.cs.jhu.edu/~zongwei/publication/liu2025shapekit.pdf'><img src='https://img.shields.io/badge/Paper-PDF-purple'></a>
 
 # News
-
+* 2025.7.30 Vertebrae module is inaugurated and added to ShapeKit 
 * 2025.6.30 We released ShapeKit 1.0.
   
 # Installation
@@ -102,14 +102,15 @@ export outputs="/path/to/your/output/folder"
 
 python -W ignore main.py --input_folder $inputs --output_folder $outputs --cpu_count 16
 ```
-> [!IMPORTANT]
-> If the input data contains large CT segmentations (more than 1,000 slices), it’s best to keep `--cpu_count` at 10 or below.
+<!-- > [!IMPORTANT]
+> If the input data contains large CT segmentations (more than 1,000 slices), it’s best to keep `--cpu_count` below 32. -->
 
 ## Plug-and-Play Configuration ➡️
 Before running ShapeKit, simply edit the `config.yaml` file to match your needs—no coding required. Use the `target_organs` section to specify which organs you want to process (e.g., liver, lung, pancreas), just like snapping together Lego blocks. 
 
 ```
 # plug-and-play like Lego! choose organs for processing
+
 target_organs: (example)
   - bladder
   - colon
@@ -122,10 +123,10 @@ target_organs: (example)
   - pancreas
 ```
 
-Also for other configuration setting please check [the config instructions file](docs/config.md).
-
 > [!IMPORTANT]
-> Before running any commands, please ensure that `config.yaml` is properly configured, with special attention to the anatomical mapping dictionary `class_map`. This mapping is critical for correct organ identification and post-processing.
+> For detailed configuration setting, please check [the config instructions file](docs/config.md).
+
+Before running any commands, please ensure that `config.yaml` is properly configured, with special attention to the anatomical mapping dictionary `class_map`. This mapping is critical for correct organ identification and post-processing.
 
 ## Data Structure
 The input and output files will be formated as:

@@ -548,6 +548,10 @@ def bbox_distance(mask1, mask2):
     return np.linalg.norm(per_axis_dist)
 
 
+def organ_HU_value(mask):
+    """3d-organ HU-values"""
+    return np.mean(mask)
+    
 
 def read_all_segmentations(folder_path, organ_list, subfolder_name='segmentations',
                            data_type=np.uint8, target_axcodes=('R', 'A', 'S')) -> dict:
