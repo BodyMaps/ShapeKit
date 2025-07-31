@@ -653,7 +653,7 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
     # choose to save the combine label
     if if_save_combined:
         # Allocate combined volume
-        sample_path = os.path.join(seg_folder, f"{next(iter(class_map.values()))}.nii.gz")
+        sample_path = os.path.join(seg_folder, f"liver.nii.gz")
         shape = nib.load(sample_path).shape
         combined = np.zeros(shape, dtype=np.uint8)
 

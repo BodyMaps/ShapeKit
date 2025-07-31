@@ -113,7 +113,7 @@ def split_overmerged_triplets(merged_segmentation, size_dict, label_z_centers, c
             for voxel in coords_lower:
                 merged_segmentation[tuple(voxel)] = next_new_label  # assign new label
 
-            print(f"[INFO]  (Vertebrae Module) Label {i0} was too large → split into {i0} (upper) + {next_new_label} (lower)")
+            print(f"[INFO] (Vertebrae Module) Label {i0} was too large → split into {i0} (upper) + {next_new_label} (lower)")
 
             # Update label dictionaries
             size_dict[i0] = len(coords_upper)
@@ -220,7 +220,7 @@ def reallocate_based_on_size(segmentation):
     for label_id in unique_labels:
         if label_id == 0:
             continue
-        label_id += 26 # NOTE set the starting index
+        # label_id += 26 # NOTE set the starting index
         mask = segmentation == label_id
         mask = remove_small_components(mask, threshold=np.sum(mask)/10) 
 
@@ -423,7 +423,7 @@ def supress_non_largest_components(img, default_val = 0):
     index_arr = get_index_arr(img)
     img_mod = copy.deepcopy(img)
     new_background = np.zeros(img.shape, dtype=np.bool_)
-    for name, label in all_labels.items():
+    for name, _ in all_labels.items():
 
             # print(f"[INFO] Now processing supress non largest cc on {label}")
             label_cc = cc3d.connected_components(img == name, connectivity=6)
@@ -450,12 +450,16 @@ def postprocessing_vertebrae(segmentation_dict: dict):
 
     # Step 1: Stack all vertebrae segmentations into a single 3D array
     vertebrae_labels = [key for key in segmentation_dict if key.startswith('vertebrae_')]
+    print(vertebrae_labels)
     if len(vertebrae_labels) == 0:
         print("[INFO] (Vertebrae Module) Vertebraes not found, skipping ...")
         return segmentation_dict
     
     vertebrae_segmentations = np.zeros_like(next(iter(segmentation_dict.values())), dtype=np.uint8)
     for idx, vertebra_name in enumerate(sorted(vertebrae_labels), start=1):
+        
+        # NOTE !! the starting index
+        idx += 26
         mask = segmentation_dict[vertebra_name]
         vertebrae_segmentations[mask > 0] = idx  # Assign unique label per vertebra, and initial
 
@@ -470,7 +474,7 @@ def postprocessing_vertebrae(segmentation_dict: dict):
     segmentation = fill(segmentation)
 
     # Split back into individual vertebrae masks
-    processed_dict = {}
+    processed_dict = segmentation_dict
     for label_id in np.unique(segmentation):
         if label_id == 0:
             continue
