@@ -52,7 +52,7 @@ def build_organ_maps(seg_dir):
 
     return organ_label_map, organ_processing_params
 
-def remove_small_components(organ_mask, combined_labels=None, current_label=None, min_size_ratio=0.05, min_merge_ratio=0.05, ORGAN_LABEL_MAP=None):
+def remove_small_components(organ_mask, combined_labels=None, current_label=None, min_size_ratio=0.05, min_merge_ratio=0.05, ORGAN_LABEL_MAP=None, min_absolute_size=10):
     """
     Remove small connected components in organ segmentation, merge larger noise regions
 
@@ -63,6 +63,7 @@ def remove_small_components(organ_mask, combined_labels=None, current_label=None
         min_size_ratio: Minimum volume ratio relative to the largest component
         min_merge_ratio: Minimum volume ratio to consider merging
         ORGAN_LABEL_MAP: Organ label map
+        min_absolute_size: Minimum absolute volume threshold (default: 10)
     """
     if not np.any(organ_mask):
         return organ_mask, {}
@@ -71,58 +72,101 @@ def remove_small_components(organ_mask, combined_labels=None, current_label=None
     if num_features <= 1:
         return organ_mask, {}
 
-    # Calculate the size of each connected component
+    # 第一步：快速删除体积小于绝对阈值的连通域
     component_sizes = ndimage.sum(organ_mask, labeled_organ, range(1, num_features + 1))
+    
+    # 找出需要删除的微小连通域
+    small_components = []
+    valid_components = []
+    removed_count = 0
+    removed_volume = 0
+    
+    for i, size in enumerate(component_sizes, 1):
+        if size < min_absolute_size:
+            small_components.append(i)
+            removed_count += 1
+            removed_volume += size
+        else:
+            valid_components.append((i, size))
+    
+    # 批量删除微小连通域
+    if small_components:
+        current_organ = next((name for name, id in ORGAN_LABEL_MAP.items() if id == current_label), f"Unknown-{current_label}") if ORGAN_LABEL_MAP and current_label else "Unknown"
+        logging.info(f"Pre-filtering {current_organ}: removing {removed_count} micro-components (volume < {min_absolute_size}), total removed volume: {removed_volume}")
+        
+        # 创建清理后的mask
+        cleaned_organ_mask = organ_mask.copy()
+        for comp_idx in small_components:
+            component = (labeled_organ == comp_idx)
+            cleaned_organ_mask[component] = False
+        
+        # 如果所有组件都被删除了，返回空mask
+        if not valid_components:
+            logging.warning(f"{current_organ}: All components removed by pre-filtering")
+            return cleaned_organ_mask, {}
+        
+        # 重新标记剩余的连通域
+        labeled_organ, num_features = ndimage.label(cleaned_organ_mask)
+        if num_features <= 1:
+            return cleaned_organ_mask, {}
+        
+        # 重新计算剩余组件的大小
+        component_sizes = ndimage.sum(cleaned_organ_mask, labeled_organ, range(1, num_features + 1))
+        organ_mask = cleaned_organ_mask
+    else:
+        logging.info(f"Pre-filtering: No micro-components found (all components >= {min_absolute_size})")
+
+    # 第二步：继续原有的相对大小处理逻辑
     max_size = np.max(component_sizes)
     size_threshold = max_size * min_size_ratio
-    min_merge_size = max_size * min_merge_ratio  # Dynamically calculate merge threshold
+    min_merge_size = max_size * min_merge_ratio
 
-    # For spleen, dynamically set merge_size
+    # 为脾脏动态设置merge_size
     if min_merge_size == 'dynamic':
-        min_merge_size = max_size * 0.1  # Use 10% of the largest component as merge threshold
+        min_merge_size = max_size * 0.1
 
-    # Create new mask, initialize with the largest component
+    # 创建新mask，初始化为最大组件
     max_component_idx = np.argmax(component_sizes) + 1
     cleaned_mask = (labeled_organ == max_component_idx)
 
-    # Record regions to be merged
+    # 记录需要合并的区域
     merge_regions = {}
 
-    # Process other components
+    # 处理其他组件
     for i, size in enumerate(component_sizes, 1):
         if i == max_component_idx:
             continue
 
         component = (labeled_organ == i)
 
-        # 1. If larger than threshold (25%), keep directly
+        # 1. 如果大于阈值（25%），直接保留
         if size >= size_threshold:
             cleaned_mask |= component
         else:
-            # If volume > min_merge_size, try to merge
+            # 如果体积 > min_merge_size，尝试合并
             if size >= min_merge_size and combined_labels is not None and current_label is not None and ORGAN_LABEL_MAP is not None:
-                # Get the border of this component
+                # 获取该组件的边界
                 dilated = ndimage.binary_dilation(component)
                 border = dilated & ~component
 
-                # Find neighboring labels on the border
+                # 找到边界上的邻近标签
                 neighbor_labels = np.unique(combined_labels[border])
                 neighbor_labels = neighbor_labels[(neighbor_labels > 0) & (neighbor_labels != current_label)]
 
                 if len(neighbor_labels) > 0:
-                    # Calculate contact area with each neighboring label
+                    # 计算与每个邻近标签的接触面积
                     contact_areas = [(label, np.sum(border & (combined_labels == label)))
                                    for label in neighbor_labels]
                     target_label = max(contact_areas, key=lambda x: x[1])[0]
                     merge_regions[int(target_label)] = merge_regions.get(int(target_label), [])
                     merge_regions[int(target_label)].append(component)
 
-                    # Get current and target organ names
+                    # 获取当前和目标器官名称
                     current_organ = next((name for name, id in ORGAN_LABEL_MAP.items() if id == current_label), f"Unknown-{current_label}") if ORGAN_LABEL_MAP and current_label else "Unknown"
                     target_organ = next((name for name, id in ORGAN_LABEL_MAP.items() if id == target_label), f"Unknown-{target_label}")
                     logging.info(f"Merging connected component of {current_organ} with volume {size} into {target_organ}")
             else:
-                # If volume < min_merge_size, remove directly
+                # 如果体积 < min_merge_size，直接删除
                 current_organ = next((name for name, id in ORGAN_LABEL_MAP.items() if id == current_label), f"Unknown-{current_label}") if ORGAN_LABEL_MAP and current_label else "Unknown"
                 logging.info(f"Removing connected component of {current_organ} with volume {size} (below threshold {size_threshold} and {min_merge_size})")
 
@@ -646,45 +690,20 @@ def fix_liver_segmentation(case_dir, output_dir=None, class_map_name="all"):
     # Process liver regions using connected component analysis
     labeled_liver, num_features = ndimage.label(liver_regions)
     
-    # Add warning for excessive fragmentation and filter components
+    # Check for excessive fragmentation - decide whether to skip noise removal
+    skip_liver_noise_removal = False
     if num_features > 50:
         logging.warning(f"Liver has {num_features} connected components, which indicates severe fragmentation.")
-        logging.info(f"Applying fragmentation filter: keeping only the largest 20 components")
-        
-        # Calculate sizes of all components
-        liver_component_sizes = ndimage.sum(liver_regions, labeled_liver, range(1, num_features + 1))
-        
-        # Get indices of the 20 largest components
-        largest_component_indices = np.argsort(liver_component_sizes)[-20:]  # Get indices of 20 largest
-        largest_component_labels = largest_component_indices + 1  # Convert to 1-based labeling
-        
-        # Create filtered liver mask with only the 20 largest components
-        filtered_liver_mask = np.zeros_like(liver_regions)
-        for label in largest_component_labels:
-            component_mask = (labeled_liver == label)
-            filtered_liver_mask |= component_mask
-        
-        # Log size information for kept components
-        kept_sizes = liver_component_sizes[largest_component_indices]
-        total_kept_volume = np.sum(kept_sizes)
-        removed_volume = original_liver_volume - total_kept_volume
-        
-        logging.info(f"Kept {len(largest_component_labels)} largest components:")
-        logging.info(f"  Largest component size: {np.max(kept_sizes)}")
-        logging.info(f"  Smallest kept component size: {np.min(kept_sizes)}")
-        logging.info(f"  Total kept volume: {total_kept_volume} ({total_kept_volume/original_liver_volume*100:.1f}%)")
-        logging.info(f"  Removed volume: {removed_volume} ({removed_volume/original_liver_volume*100:.1f}%)")
-        
-        # Update liver regions and relabel
-        liver_regions = filtered_liver_mask
-        labeled_liver, num_features = ndimage.label(liver_regions)
-        logging.info(f"After fragmentation filtering: {num_features} components remaining")
-    
+        logging.info(f"Skipping small connected component removal for liver, but will still apply spatial constraints")
+        skip_liver_noise_removal = True
+    else:
+        logging.info(f"Liver has {num_features} connected components, will apply both noise removal and spatial constraints")
+
     # Calculate liver's maximum connected component volume and check if lung and bladder volumes meet criteria
     if num_features > 0:
         liver_component_sizes = ndimage.sum(liver_regions, labeled_liver, range(1, num_features + 1))
         max_liver_size = np.max(liver_component_sizes)
-        logging.info(f"Liver has {num_features} connected components, maximum component volume: {max_liver_size}")
+        logging.info(f"Liver maximum component volume: {max_liver_size}")
         
         # Check if total lung volume is large enough
         lung_volume_threshold = 10000  # Fixed threshold of 10000
@@ -705,19 +724,19 @@ def fix_liver_segmentation(case_dir, output_dir=None, class_map_name="all"):
         has_sufficient_lung_volume = False
         has_sufficient_z_reference = False
         logging.warning("No liver connected components found after processing")
-    
+
     # Determine whether to use x-axis and z-axis constraints
     apply_x_constraint = has_lung_for_x_constraint and has_sufficient_lung_volume
     apply_z_constraint = (bladder_center is not None and 
                          lung_right_center is not None and 
                          has_sufficient_z_reference)
-    
+
     liver_mask = liver_regions.copy()
-    
-    # Analyze range of each liver connected component with progress logging
+
+    # Apply spatial constraints to liver (ALWAYS apply, regardless of fragmentation)
     components_to_remove = []
     components_to_keep = []
-    
+
     for i in range(1, num_features + 1):
         # Log progress for large numbers of components
         if num_features > 20 and i % 10 == 0:
@@ -765,24 +784,29 @@ def fix_liver_segmentation(case_dir, output_dir=None, class_map_name="all"):
             if num_features <= 20:  # Only log individual components for smaller numbers
                 logging.info(f"Keeping liver connected component {i}, center position: x={x_center:.2f}, z={z_center:.2f}")
 
-    # Batch update liver mask
+    # Batch update liver mask (apply spatial constraints)
     for i in components_to_remove:
         component = labeled_liver == i
         liver_mask[component] = False
-    
+
     # Log summary
-    logging.info(f"Liver component processing complete: kept {len(components_to_keep)}, removed {len(components_to_remove)} components")
-    
+    logging.info(f"Liver spatial constraint processing complete: kept {len(components_to_keep)}, removed {len(components_to_remove)} components")
+
     # Create new combined_labels, preserving original labels
     new_combined_labels[liver_regions] = 0
     new_combined_labels[liver_mask] = liver_label
-    
+
     # Remove noise from each organ - BUT ONLY FOR ORGANS IN CLASS MAP
     merge_updates = {}  # Record all regions to be merged
-    
+
     for name, label_id in ORGAN_LABEL_MAP.items():
-        if label_id == liver_label:  # Skip already processed liver
-            continue
+        # Skip liver if it has excessive fragmentation
+        if label_id == liver_label:
+            if skip_liver_noise_removal:
+                logging.info(f"Skipping noise removal for liver due to excessive fragmentation (>50 components)")
+                continue
+            else:
+                logging.info(f"Processing noise removal for liver")
         
         # Only process organs that are in the class map
         if name not in PROCESS_ORGAN_MAP:
@@ -802,7 +826,8 @@ def fix_liver_segmentation(case_dir, output_dir=None, class_map_name="all"):
                 current_label=label_id,
                 min_size_ratio=organ_params['min_size_ratio'],
                 min_merge_ratio=organ_params['min_merge_ratio'],
-                ORGAN_LABEL_MAP=ORGAN_LABEL_MAP
+                ORGAN_LABEL_MAP=ORGAN_LABEL_MAP,
+                min_absolute_size=10
             )
             
             # Update labels
@@ -814,19 +839,25 @@ def fix_liver_segmentation(case_dir, output_dir=None, class_map_name="all"):
                 if target_label not in merge_updates:
                     merge_updates[target_label] = []
                 merge_updates[target_label].extend(regions)
-    
+
     # Process all regions to be merged
     for target_label, regions in merge_updates.items():
-        for target_label, regions in merge_updates.items():
-            for region in regions:
-                new_combined_labels[region] = target_label
-                logging.info(f"Completed region merging to label {target_label}")
-    
+        for region in regions:
+            new_combined_labels[region] = target_label
+            logging.info(f"Completed region merging to label {target_label}")
+
     # Calculate corrected volume
     corrected_liver_volume = np.sum(new_combined_labels == liver_label)
-    logging.info(f"Liver segmentation correction complete:")
+    logging.info(f"Liver segmentation processing complete:")
     logging.info(f"  Original volume: {original_liver_volume}")
-    logging.info(f"  Corrected volume: {corrected_liver_volume} (reduced by {(original_liver_volume - corrected_liver_volume) / original_liver_volume * 100:.2f}%)")
+    logging.info(f"  Final volume: {corrected_liver_volume}")
+    spatial_volume_change = original_liver_volume - corrected_liver_volume
+    if spatial_volume_change > 0:
+        logging.info(f"  Volume reduced by {spatial_volume_change/original_liver_volume*100:.2f}% due to spatial constraints")
+    if skip_liver_noise_removal:
+        logging.info(f"  Note: Small connected component removal was skipped due to excessive fragmentation")
+    else:
+        logging.info(f"  Note: Both spatial constraints and noise removal were applied")
     
     # After noise removal and region merging for each organ is completed
     
@@ -882,7 +913,7 @@ def fix_liver_segmentation(case_dir, output_dir=None, class_map_name="all"):
         else:
             logging.warning(f"Organ {organ_name} not found in label mapping")
     
-    logging.info(f"Processed files have been saved to: {output_dir}")
+    logging.info(f"Processed files have been saved to: {after_processing_dir}")
     logging.info(f"Individual organ segmentation files have been saved to: {after_seg_dir}")
     logging.info(f"Processed organs using class map '{class_map_name}': {list(PROCESS_ORGAN_MAP.keys())}")
     
@@ -1493,3 +1524,6 @@ if __name__ == "__main__":
     
     process_all_cases(input_dir, output_dir, num_processes, case_list_file, class_map_name)
     logging.info("Post-processing complete")
+
+    
+
