@@ -97,11 +97,16 @@ done < requirements.txt
 ```
 
 # Run ShapeKit
+1. Modify the parameters in `run.sh`:
 ```bash
 export inputs="/path/to/your/input/folder"
 export outputs="/path/to/your/output/folder"
+export CPU_NUM=16
+```
 
-python -W ignore main.py --input_folder $inputs --output_folder $outputs --cpu_count 16
+2. Then:
+```bash
+bash run.sh
 ```
 <!-- > [!IMPORTANT]
 > If the input data contains large CT segmentations (more than 1,000 slices), it’s best to keep `--cpu_count` below 32. -->
@@ -122,6 +127,7 @@ target_organs: (example)
   - liver
   - lung
   - pancreas
+  - vertebrae
 ```
 
 > [!IMPORTANT]
