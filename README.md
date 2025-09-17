@@ -43,7 +43,7 @@ Junqi Liu*, Dongli He*, [Wenxuan Li](https://scholar.google.com/citations?hl=en&
 *Equal contribution. <br/>
 MICCAI 2025 Workshop on Shape in Medical Imaging
 
-<a href='https://www.zongweiz.com/dataset'><img src='https://img.shields.io/badge/Project-Page-Green'></a> <a href='https://www.cs.jhu.edu/~zongwei/publication/liu2025shapekit.pdf'><img src='https://img.shields.io/badge/Paper-PDF-purple'></a>
+<a href='https://www.zongweiz.com/dataset'><img src='https://img.shields.io/badge/Project-Page-Green'></a> <a href='https://www.cs.jhu.edu/~zongwei/publication/liu2025shapekit.pdf'><img src='https://img.shields.io/badge/Paper-PDF-purple'></a> <a href='http://www.cs.jhu.edu/~zongwei/poster/liu2025miccaiw_shapekit.pdf'><img src='https://img.shields.io/badge/Poster-PDF-blue'></a>
 
 # News
 * 2025.7.30 Vertebrae module is inaugurated and added to ShapeKit 
