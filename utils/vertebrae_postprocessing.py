@@ -8,6 +8,7 @@ from scipy.ndimage import generate_binary_structure
 from scipy.ndimage import label, binary_dilation, binary_erosion
 from skimage.measure import label, regionprops
 from scipy import ndimage
+from .utils import remove_small_components, fill_holes
 
 
 #### @jliu452 postprocessing codes for the vertabreas part
@@ -46,19 +47,6 @@ all_labels = {
 
 def get_index_arr(img):
     return np.moveaxis(np.moveaxis(np.stack(np.meshgrid(np.arange(img.shape[0]), np.arange(img.shape[1]), np.arange(img.shape[2]))),0,3),0,1)
-
-
-def remove_small_components(mask, threshold):
-    labeled_mask = label(mask)
-    regions = regionprops(labeled_mask)
-    for region in regions:
-        if region.area < threshold:
-            labeled_mask[labeled_mask == region.label] = 0
-    return labeled_mask > 0
-
-
-def fill_holes(mask):
-    return ndimage.binary_fill_holes(mask)
 
 
 def fill(segmentation):
