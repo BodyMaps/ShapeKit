@@ -40,7 +40,7 @@ def combine_segmentation_dict(segmentation_dict: dict, class_map: dict) -> np.nd
 
     for index, organ_name in class_map.items():
         mask = segmentation_dict.get(organ_name)
-        if mask is None or np.sum(mask) == 0:
+        if mask is None or not np.any(mask):
             continue
         combined[mask > 0] = index
 

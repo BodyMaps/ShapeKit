@@ -364,14 +364,18 @@ def split_organ(mask, axis):
     # Find the slice with the fewest voxels
     cut_index = min(slice_voxel_counts, key=slice_voxel_counts.get)
     
+    # Vectorized split - much faster than looping through coordinates
     left_mask = np.zeros_like(mask, dtype=mask.dtype)
     right_mask = np.zeros_like(mask, dtype=mask.dtype)
-
-    for z, y, x in coords:
-        if [z, y, x][axis] < cut_index:
-            left_mask[z, y, x] = 1
-        else:
-            right_mask[z, y, x] = 1
+    
+    # Create boolean mask for the split
+    axis_coords = coords[:, axis]
+    left_indices = coords[axis_coords < cut_index]
+    right_indices = coords[axis_coords >= cut_index]
+    
+    # Assign using advanced indexing
+    left_mask[left_indices[:, 0], left_indices[:, 1], left_indices[:, 2]] = 1
+    right_mask[right_indices[:, 0], right_indices[:, 1], right_indices[:, 2]] = 1
 
     return right_mask, left_mask
 
