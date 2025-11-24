@@ -89,17 +89,17 @@ def post_processing_colon_intestine(segmentation_dict):
     intestine_mask = segmentation_dict.get('intestine')
 
     # Compute threshold once for colon
-    colon_threshold = max(1, np.sum(colon_mask) / 10)
-    cleaned_colon_mask = remove_small_components(colon_mask, threshold=colon_threshold)
-
-    # re-insert
-    segmentation_dict['colon'] = cleaned_colon_mask
+    if colon_mask is not None and np.any(colon_mask):
+        colon_threshold = max(1, np.sum(colon_mask) / 10)
+        cleaned_colon_mask = remove_small_components(colon_mask, threshold=colon_threshold)
+        segmentation_dict['colon'] = cleaned_colon_mask
     
     try:
         # Compute threshold once for intestine
-        intestine_threshold = max(1, np.sum(intestine_mask) / 10)
-        cleaned_intestine_mask = remove_small_components(intestine_mask, threshold=intestine_threshold)
-        segmentation_dict['intestine'] = cleaned_intestine_mask
+        if intestine_mask is not None and np.any(intestine_mask):
+            intestine_threshold = max(1, np.sum(intestine_mask) / 10)
+            cleaned_intestine_mask = remove_small_components(intestine_mask, threshold=intestine_threshold)
+            segmentation_dict['intestine'] = cleaned_intestine_mask
     except:
         print("[INFO] (Colon-Intestine Check Module) Intestine does not exist, skipped ...")
     return segmentation_dict
@@ -115,9 +115,10 @@ def post_processing_stomach(segmentation_dict):
         
     """
     stomach_mask = segmentation_dict['stomach'].copy()
-    stomach_threshold = max(1, np.sum(stomach_mask) / 10)
-    cleaned_stomach_mask = remove_small_components(stomach_mask, threshold=stomach_threshold)
-    segmentation_dict['stomach'] = cleaned_stomach_mask
+    if stomach_mask is not None and np.any(stomach_mask):
+        stomach_threshold = max(1, np.sum(stomach_mask) / 10)
+        cleaned_stomach_mask = remove_small_components(stomach_mask, threshold=stomach_threshold)
+        segmentation_dict['stomach'] = cleaned_stomach_mask
 
     return segmentation_dict
 
@@ -125,9 +126,10 @@ def post_processing_stomach(segmentation_dict):
 def post_processing_duodenum(segmentation_dict):
     """"""
     duodenum_mask = segmentation_dict.get('duodenum')
-    duodenum_threshold = max(1, np.sum(duodenum_mask) / 10)
-    cleaned_duodenum_mask = remove_small_components(duodenum_mask, duodenum_threshold)
-    segmentation_dict['duodenum'] = cleaned_duodenum_mask
+    if duodenum_mask is not None and np.any(duodenum_mask):
+        duodenum_threshold = max(1, np.sum(duodenum_mask) / 10)
+        cleaned_duodenum_mask = remove_small_components(duodenum_mask, duodenum_threshold)
+        segmentation_dict['duodenum'] = cleaned_duodenum_mask
 
     return segmentation_dict
 
@@ -483,7 +485,10 @@ def post_processing_bladder_prostate(segmentation_dict:dict, segmentation:np.arr
     target_organs = ['bladder', 'prostate']
 
     for organ in target_organs:
-        organ_mask = segmentation_dict.get(organ).copy()
+        organ_mask = segmentation_dict.get(organ)
+        if organ_mask is None:
+            continue
+        organ_mask = organ_mask.copy()
         organ_threshold = max(1, np.sum(organ_mask) / 10)
         organ_mask = remove_small_components(organ_mask, organ_threshold)
         if np.sum(organ_mask) == 0:
@@ -510,6 +515,8 @@ def post_processing_aorta_postcava(segmentation_dict:dict):
     target_organs = ['aorta', 'postcava']
     for organ in target_organs:
         organ_mask = segmentation_dict.get(organ)
+        if organ_mask is None or not np.any(organ_mask):
+            continue
         organ_threshold = max(1, np.sum(organ_mask) / 10)
         cleaned_organ_mask = remove_small_components(organ_mask, organ_threshold)
         segmentation_dict[organ] = cleaned_organ_mask
