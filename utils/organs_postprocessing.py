@@ -53,9 +53,6 @@ def post_processing_pancreas(segmentation_dict, dice_threshold=0.05):
         head_mask     = segmentation_dict['pancreas_head']
         body_mask     = segmentation_dict['pancreas_body']
         tail_mask     = segmentation_dict['pancreas_tail']
-        
-        temp = head_mask[2]
-        del temp
 
         # Combine parts
         combined_parts_mask = ((head_mask + body_mask + tail_mask) > 0).astype(data_type)
@@ -91,14 +88,17 @@ def post_processing_colon_intestine(segmentation_dict):
     colon_mask = segmentation_dict.get('colon')
     intestine_mask = segmentation_dict.get('intestine')
 
-    # remove small artifacts
-    cleaned_colon_mask = remove_small_components(colon_mask, threshold=np.sum(colon_mask)/10)
+    # Compute threshold once for colon
+    colon_threshold = max(1, np.sum(colon_mask) / 10)
+    cleaned_colon_mask = remove_small_components(colon_mask, threshold=colon_threshold)
 
     # re-insert
     segmentation_dict['colon'] = cleaned_colon_mask
     
     try:
-        cleaned_intestine_mask = remove_small_components(intestine_mask, threshold=np.sum(intestine_mask)/10)
+        # Compute threshold once for intestine
+        intestine_threshold = max(1, np.sum(intestine_mask) / 10)
+        cleaned_intestine_mask = remove_small_components(intestine_mask, threshold=intestine_threshold)
         segmentation_dict['intestine'] = cleaned_intestine_mask
     except:
         print("[INFO] (Colon-Intestine Check Module) Intestine does not exist, skipped ...")
@@ -115,7 +115,8 @@ def post_processing_stomach(segmentation_dict):
         
     """
     stomach_mask = segmentation_dict['stomach'].copy()
-    cleaned_stomach_mask = remove_small_components(stomach_mask, threshold=np.sum(stomach_mask) / 10)
+    stomach_threshold = max(1, np.sum(stomach_mask) / 10)
+    cleaned_stomach_mask = remove_small_components(stomach_mask, threshold=stomach_threshold)
     segmentation_dict['stomach'] = cleaned_stomach_mask
 
     return segmentation_dict
@@ -124,7 +125,8 @@ def post_processing_stomach(segmentation_dict):
 def post_processing_duodenum(segmentation_dict):
     """"""
     duodenum_mask = segmentation_dict.get('duodenum')
-    cleaned_duodenum_mask = remove_small_components(duodenum_mask, np.sum(duodenum_mask)/10)
+    duodenum_threshold = max(1, np.sum(duodenum_mask) / 10)
+    cleaned_duodenum_mask = remove_small_components(duodenum_mask, duodenum_threshold)
     segmentation_dict['duodenum'] = cleaned_duodenum_mask
 
     return segmentation_dict
@@ -207,16 +209,20 @@ def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, refe
             return organ_mask
         
 
-    # Prepare to filter femur voxels
+    # Vectorized filtering - much faster than looping through coordinates
     corrected_organ_mask = organ_mask.copy()
     organ_coords = np.argwhere(organ_mask)
-
-    for coord in organ_coords:
-        z = coord[AXIS_Z]
-        if (not reversed_z and z < z_limit) or (reversed_z and z > z_limit):
-            corrected_organ_mask[tuple(coord)] = 0
-        
-        del coord # free up space
+    
+    # Create boolean mask for voxels to remove
+    z_values = organ_coords[:, AXIS_Z]
+    if not reversed_z:
+        voxels_to_remove = z_values < z_limit
+    else:
+        voxels_to_remove = z_values > z_limit
+    
+    # Apply removal using vectorized indexing
+    coords_to_remove = organ_coords[voxels_to_remove]
+    corrected_organ_mask[coords_to_remove[:, 0], coords_to_remove[:, 1], coords_to_remove[:, 2]] = 0
 
     removed_voxels = np.sum(organ_mask) - np.sum(corrected_organ_mask)
     if removed_voxels > 0:
@@ -253,7 +259,8 @@ def post_processing_femur(segmentation_dict: dict, axis_map: dict, calibration_s
         return segmentation_dict
 
     # first step cleaning
-    cleaned_mask = remove_small_components(femur_mask, np.sum(femur_mask)/10)
+    femur_threshold = max(1, np.sum(femur_mask) / 10)
+    cleaned_mask = remove_small_components(femur_mask, femur_threshold)
 
     # Split right / left
     right_mask, left_mask = split_right_left(mask=cleaned_mask, AXIS=axis_map['x'])
@@ -291,7 +298,8 @@ def post_processing_kidney(segmentation_dict: dict, axis_map: dict, calibration_
 
     # Combine and clean
     kidney_mask = ((kidney_left > 0) | (kidney_right > 0)).astype(np.uint8)
-    cleaned_kidney_mask = remove_small_components(kidney_mask, threshold=np.sum(kidney_mask) / 10)
+    kidney_threshold = max(1, np.sum(kidney_mask) / 10)
+    cleaned_kidney_mask = remove_small_components(kidney_mask, threshold=kidney_threshold)
 
     # Split left/right
     right_mask, left_mask = split_right_left(cleaned_kidney_mask, AXIS=axis_map['x'])
@@ -425,7 +433,6 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
         else:
             print("[INFO] (Lung Check Module) No valid lung remaining after reassignment. Skip lung post-processing ...")
             return segmentation_dict_new
-            segmentation_dict = segmentation_dict_new
     else:
         # continues
         segmentation_dict = segmentation_dict_new
@@ -477,7 +484,8 @@ def post_processing_bladder_prostate(segmentation_dict:dict, segmentation:np.arr
 
     for organ in target_organs:
         organ_mask = segmentation_dict.get(organ).copy()
-        organ_mask = remove_small_components(organ_mask, np.sum(organ_mask)/10)
+        organ_threshold = max(1, np.sum(organ_mask) / 10)
+        organ_mask = remove_small_components(organ_mask, organ_threshold)
         if np.sum(organ_mask) == 0:
             continue
         
@@ -502,7 +510,8 @@ def post_processing_aorta_postcava(segmentation_dict:dict):
     target_organs = ['aorta', 'postcava']
     for organ in target_organs:
         organ_mask = segmentation_dict.get(organ)
-        cleaned_organ_mask = remove_small_components(organ_mask,np.sum(organ_mask)/10)
+        organ_threshold = max(1, np.sum(organ_mask) / 10)
+        cleaned_organ_mask = remove_small_components(organ_mask, organ_threshold)
         segmentation_dict[organ] = cleaned_organ_mask
 
     return segmentation_dict
@@ -520,7 +529,8 @@ def post_processing_adrenal_gland(segmentation_dict: dict, axis_map: dict, calib
         return segmentation_dict
 
     adrenal_mask = ((adrenal_left > 0) | (adrenal_right > 0)).astype(np.uint8)
-    adrenal_mask = remove_small_components(adrenal_mask, np.sum(adrenal_mask) / 10)
+    adrenal_threshold = max(1, np.sum(adrenal_mask) / 10)
+    adrenal_mask = remove_small_components(adrenal_mask, adrenal_threshold)
 
     # Split left/right
     right_mask, left_mask = split_right_left(adrenal_mask, AXIS=axis_map['x'])

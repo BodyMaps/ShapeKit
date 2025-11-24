@@ -464,18 +464,6 @@ def balance_protrusion_between_masks(mask_A, mask_B, axis=2, min_cc_voxel=1000):
     return new_mask_A, new_mask_B
 
 
-def smooth_binary_image(binary_image, iterations=1):
-    """
-    Smoothing tools
-    """
-    num_dimensions = binary_image.ndim
-    structure = generate_binary_structure(num_dimensions, 1)  # Structure for the number of dimensions
-    smoothed_image = binary_dilation(binary_image, structure=structure, iterations=iterations)
-    smoothed_image = binary_erosion(smoothed_image, structure=structure, iterations=iterations)
-
-    return smoothed_image
-
-
 def reassign_left_right_based_on_liver(right_mask, left_mask, liver_mask):
     """
     Reassign left and right masks based on proximity to the liver.
