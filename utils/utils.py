@@ -364,14 +364,18 @@ def split_organ(mask, axis):
     # Find the slice with the fewest voxels
     cut_index = min(slice_voxel_counts, key=slice_voxel_counts.get)
     
+    # Vectorized split - much faster than looping through coordinates
     left_mask = np.zeros_like(mask, dtype=mask.dtype)
     right_mask = np.zeros_like(mask, dtype=mask.dtype)
-
-    for z, y, x in coords:
-        if [z, y, x][axis] < cut_index:
-            left_mask[z, y, x] = 1
-        else:
-            right_mask[z, y, x] = 1
+    
+    # Create boolean mask for the split
+    axis_coords = coords[:, axis]
+    left_indices = coords[axis_coords < cut_index]
+    right_indices = coords[axis_coords >= cut_index]
+    
+    # Assign using advanced indexing
+    left_mask[left_indices[:, 0], left_indices[:, 1], left_indices[:, 2]] = 1
+    right_mask[right_indices[:, 0], right_indices[:, 1], right_indices[:, 2]] = 1
 
     return right_mask, left_mask
 
@@ -462,18 +466,6 @@ def balance_protrusion_between_masks(mask_A, mask_B, axis=2, min_cc_voxel=1000):
             new_mask_A[cc_B == cc_id] = 1
 
     return new_mask_A, new_mask_B
-
-
-def smooth_binary_image(binary_image, iterations=1):
-    """
-    Smoothing tools
-    """
-    num_dimensions = binary_image.ndim
-    structure = generate_binary_structure(num_dimensions, 1)  # Structure for the number of dimensions
-    smoothed_image = binary_dilation(binary_image, structure=structure, iterations=iterations)
-    smoothed_image = binary_erosion(smoothed_image, structure=structure, iterations=iterations)
-
-    return smoothed_image
 
 
 def reassign_left_right_based_on_liver(right_mask, left_mask, liver_mask):
