@@ -45,11 +45,11 @@ MICCAI 2025 Workshop on Shape in Medical Imaging
 
 Clone the repository and install dependencies:
 
-<details>
+<!-- <details>
 <summary style="margin-left: 25px;">[Optional 1] Install Anaconda on Linux</summary>
-<div style="margin-left: 25px;">
+<div style="margin-left: 25px;"> -->
     
-```bash
+<!-- ```bash
 wget https://repo.anaconda.com/archive/Anaconda3-2024.06-1-Linux-x86_64.sh
 bash Anaconda3-2024.06-1-Linux-x86_64.sh -b -p ./anaconda3
 ./anaconda3/bin/conda init
@@ -78,7 +78,7 @@ git fetch
 git pull
 ```
 </div>
-</details>
+</details> -->
 
 ```bash
 git clone https://github.com/BodyMaps/ShapeKit.git
