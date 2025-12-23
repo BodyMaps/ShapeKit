@@ -72,16 +72,16 @@ export LOG="logs/folder_named_after_your_task"
 python -W ignore main.py --input_folder $INPUT --output_folder $OUTPUT --cpu_count $CPU_NUM --continue_prediction
 ```
 
-## Plug-and-Play Configuration
-Tell ShapeKit which organs you are interested in by listing them in the `config.yaml` file.
+# Plug-and-Play Configuration
+Tell ShapeKit which anatomical structures you are interested in by modifying the `config.yaml` file.
 
 <details>
 <summary style="margin-left: 25px;">Check for details 🔍</summary>
 <div style="margin-left: 25px;">
 
-### How to choose your targets:
+### How to choose your interested anatomical structures:
 
-Simply open the `config.yaml`file and list the organs you want to process under target_organs. It’s as easy as checking boxes on a form.
+Open the `config.yaml`file and list the anatomical structures you want to process under target_organs. It’s as easy as checking boxes on a form.
 
 ```
 # plug-and-play like Lego! choose organs for processing
@@ -104,27 +104,10 @@ target_organs: (example)
 Before running any commands, please ensure that `config.yaml` is properly configured. But don't worry! **Most of the configurations do not need to be changed at all.**
 </details>
 
-## Data Structure
-The input and output files will be formated as [BodyMap form](https://huggingface.co/datasets/AbdomenAtlas/AbdomenAtlas1.0Mini/tree/main):
-```
-INPUT or OUTPUT
-└── case_001
-    ├── combined_labels.nii.gz (optional)
-    └── segmentations
-            ├── liver.nii.gz
-            ...
-            └── veins.nii.gz
-```
-> [!IMPORTANT] 
->  If you set outputs and inputs the same, the system will automatically overwrite the orginal folder.
-
 # Key Functions
 In addition to these general utilities, organ-specific correction functions are available in [organs_postprocessing.py](organs_postprocessing.py).
 
 Please check the details in [functions guide book 📖.](docs/functions.md)
-
-
-
 
 # Related Articles
 
