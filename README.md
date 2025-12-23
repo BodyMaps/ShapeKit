@@ -33,9 +33,14 @@ MICCAI 2025 Workshop on Shape in Medical Imaging
 
 <a href='https://www.zongweiz.com/dataset'><img src='https://img.shields.io/badge/Project-Page-Green'></a> <a href='https://www.cs.jhu.edu/~zongwei/publication/liu2025shapekit.pdf'><img src='https://img.shields.io/badge/Paper-PDF-purple'></a> <a href='http://www.cs.jhu.edu/~zongwei/poster/liu2025miccaiw_shapekit.pdf'><img src='https://img.shields.io/badge/Poster-PDF-blue'></a>
 
-# News
-* 2025.7.30 Vertebrae module is inaugurated and added to ShapeKit 
-* 2025.6.30 We released ShapeKit 1.0.
+# News & Updates
+
+| Date | Description |
+| :--- | :--- |
+| **Dec 23, 2025** | 🎄 Added **Continue Prediction** option & improved **Print UI** |
+| **Jul 30, 2025** | 🤖  **Vertebrae module** inaugurated and added to ShapeKit |
+| **Jun 30, 2025** | 🚀 ShapeKit 1.0 Official Release
+|
   
 # Installation
 
@@ -84,23 +89,26 @@ while read requirement; do
 done < requirements.txt
 ```
 
-# Run ShapeKit
-1. Modify the parameters in `run.sh`:
+# Use ShapeKit
 ```bash
 export inputs="/path/to/your/input/folder"
 export outputs="/path/to/your/output/folder"
 export CPU_NUM=16
+
+python -W ignore main.py --input_folder $inputs --output_folder $outputs --cpu_count $CPU_NUM --continue_prediction
 ```
 
-2. Then:
-```bash
-bash run.sh
-```
+Or you can also use `sh bash.sh`.
+
 <!-- > [!IMPORTANT]
 > If the input data contains large CT segmentations (more than 1,000 slices), it’s best to keep `--cpu_count` below 32. -->
 
 ## Plug-and-Play Configuration ➡️
-Before running ShapeKit, simply edit the `config.yaml` file to match your needs—no coding required. Use the `target_organs` section to specify which organs you want to process (e.g., liver, lung, pancreas), just like snapping together Lego blocks. 
+ShapeKit is designed to be *plug-and-play*. You don't need any coding knowledge to get started. Just tell the system which organs you are interested in by listing them in the `config.yaml` file.
+
+### How to choose your targets:
+
+Simply open the `config.yaml`file and list the organs you want to process under target_organs. It’s as easy as checking boxes on a form.
 
 ```
 # plug-and-play like Lego! choose organs for processing
@@ -119,12 +127,12 @@ target_organs: (example)
 ```
 
 > [!IMPORTANT]
-> For detailed configuration setting, please check [the config instructions file](docs/config.md).
+> For detailed configuration setting, please check [the config instructions 🌞](docs/config.md).
 
-Before running any commands, please ensure that `config.yaml` is properly configured, with special attention to the anatomical mapping dictionary `class_map`. This mapping is critical for correct organ identification and post-processing.
+Before running any commands, please ensure that `config.yaml` is properly configured. But don't worry! **Most of the configurations do not need to be changed at all.**
 
 ## Data Structure
-The input and output files will be formated as:
+The input and output files will be formated as [BodyMap form](https://huggingface.co/datasets/AbdomenAtlas/AbdomenAtlas1.0Mini/tree/main):
 ```
 INPUT or OUTPUT
 └── case_001
@@ -138,11 +146,9 @@ INPUT or OUTPUT
 >  If you set outputs and inputs the same, the system will automatically overwrite the orginal folder.
 
 # Key Functions
-Here outlines several key post-processing functions designed to handle common segmentation errors across multiple organs. In addition to these general utilities, organ-specific correction functions are also available in [organs_postprocessing.py](organs_postprocessing.py).
+In addition to these general utilities, organ-specific correction functions are available in [organs_postprocessing.py](organs_postprocessing.py).
 
 Please check the details in [functions guide book 📖.](docs/functions.md)
-
-
 
 
 
