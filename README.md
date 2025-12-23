@@ -39,8 +39,7 @@ MICCAI 2025 Workshop on Shape in Medical Imaging
 | :--- | :--- |
 | **Dec 23, 2025** | 🎄 Added **Continue Prediction** option & improved **Print UI** |
 | **Jul 30, 2025** | 🤖  **Vertebrae module** inaugurated and added to ShapeKit |
-| **Jun 30, 2025** | 🚀 ShapeKit 1.0 Official Release
-|
+| **Jun 30, 2025** | 🚀 ShapeKit 1.0 Official Release|
   
 # Installation
 
