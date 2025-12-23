@@ -46,3 +46,7 @@ postprocessing.log
 /tmp/
 *.tmp
 .DS_Store
+
+PanTS
+temp 
+run.sh

@@ -72,6 +72,8 @@ export LOG="logs/folder_named_after_your_task"
 python -W ignore main.py --input_folder $INPUT --output_folder $OUTPUT --cpu_count $CPU_NUM --continue_prediction
 ```
 
+The processing process will be recorded as `debug.log` and `postprocessing.log`,and are stored under the directory `LOG`.
+
 # Plug-and-Play Configuration
 Tell ShapeKit which anatomical structures you are interested in by modifying the `config.yaml` file.
 
@@ -81,7 +83,7 @@ Tell ShapeKit which anatomical structures you are interested in by modifying the
 
 ### How to choose your interested anatomical structures:
 
-Open the `config.yaml`file and list the anatomical structures you want to process under target_organs. It’s as easy as checking boxes on a form.
+Open the `config.yaml`file and list the anatomical structures you want to process under `target_organs`. It’s as easy as checking boxes on a form.
 
 ```
 # plug-and-play like Lego! choose organs for processing
@@ -105,7 +107,7 @@ Before running any commands, please ensure that `config.yaml` is properly config
 </details>
 
 # Key Functions
-In addition to these general utilities, organ-specific correction functions are available in [organs_postprocessing.py](organs_postprocessing.py).
+In addition to these general utilities, anatomical-structures-specific correction functions are available in [organs_postprocessing.py](organs_postprocessing.py).
 
 Please check the details in [functions guide book 📖.](docs/functions.md)
 

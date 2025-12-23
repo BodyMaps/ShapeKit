@@ -31,25 +31,44 @@ reference_file_name =  affine_reference_file_name # affine info
 data_type = np.int16
 save_combined_label_bool = bool(config['if_save_combined_label'])
 
-
-# set up logging 
-logging.basicConfig(
-    filename='debug.log',  
-    level=logging.DEBUG,
-    format='[%(levelname)s] %(asctime)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-
-post_logger = logging.getLogger("postprocessing")
-post_logger.setLevel(logging.INFO)
-post_handler = logging.FileHandler("postprocessing.log")
-post_handler.setFormatter(logging.Formatter(
-    '[%(levelname)s] %(asctime)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-))
-post_logger.propagate = False
-post_logger.addHandler(post_handler)
 ##############################################################
+
+
+
+def check_unprocessed_cases(input_folder: str, output_folder: str, csv_path: str = "continue.csv"):
+    """
+    Continue-prediction module
+    """
+    input_patients = sorted(
+        [d for d in os.listdir(input_folder) if os.path.isdir(os.path.join(input_folder, d))]
+    )
+
+    unprocessed = []
+
+    for pid in input_patients:
+        out_dir = os.path.join(output_folder, pid)
+        seg_dir = os.path.join(out_dir, "segmentations")
+
+        processed = (
+            os.path.isdir(seg_dir)
+            and len(os.listdir(seg_dir)) > 0
+        )
+
+        if not processed:
+            unprocessed.append(pid)
+
+    # write CSV
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Inference ID"])
+        for pid in unprocessed:
+            writer.writerow([pid])
+
+    print(f"[INFO] Found {len(unprocessed)} unprocessed cases. Saved to {csv_path}")
+
+    return unprocessed
+
+
 
 
 def combine_segmentation_dict(segmentation_dict: dict, class_map: dict) -> np.ndarray:
@@ -249,44 +268,36 @@ def run_in_parallel(sub_folders, input_folder, output_folder, max_workers=4):
 parser = argparse.ArgumentParser(description="Anatomical-aware post-processing")
 parser.add_argument('--input_folder', type=str, help='Input files folder location, /path/to/input/data')
 parser.add_argument('--output_folder', type=str, help='Output files folder location, /path/to/save/results')
+parser.add_argument('--log_folder', type=str, default='./logs/task_001', help='Logging folder location')
 parser.add_argument('--csv', type=str, default=None, help='Guidence csv file telling ShapeKit specific ones for processing')
 parser.add_argument('--cpu_count', type=int, default=cpu_count(), help='Number of CPU cores to use for parallel processing (default: system max)')
 parser.add_argument('--continue_prediction', action="store_true", help='If continue from last processing record')
 args = parser.parse_args()
 
 
-def check_unprocessed_cases(input_folder: str, output_folder: str, csv_path: str = "continue.csv"):
-    """
-    Continue-prediction module
-    """
-    input_patients = sorted(
-        [d for d in os.listdir(input_folder) if os.path.isdir(os.path.join(input_folder, d))]
-    )
 
-    unprocessed = []
+# set up logging 
+os.makedirs(args.log_folder, exist_ok=True)
+logging.basicConfig(
+    filename=f'{args.log_folder}/debug.log',  
+    level=logging.DEBUG,
+    format='[%(levelname)s] %(asctime)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
-    for pid in input_patients:
-        out_dir = os.path.join(output_folder, pid)
-        seg_dir = os.path.join(out_dir, "segmentations")
+post_logger = logging.getLogger("postprocessing")
+post_logger.setLevel(logging.INFO)
+post_handler = logging.FileHandler(f"{args.log_folder}/postprocessing.log")
+post_handler.setFormatter(logging.Formatter(
+    '[%(levelname)s] %(asctime)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+))
+post_logger.propagate = False
+post_logger.addHandler(post_handler)
 
-        processed = (
-            os.path.isdir(seg_dir)
-            and len(os.listdir(seg_dir)) > 0
-        )
 
-        if not processed:
-            unprocessed.append(pid)
 
-    # write CSV
-    with open(csv_path, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Inference ID"])
-        for pid in unprocessed:
-            writer.writerow([pid])
 
-    print(f"[INFO] Found {len(unprocessed)} unprocessed cases. Saved to {csv_path}")
-
-    return unprocessed
 
 
 
@@ -316,4 +327,5 @@ if __name__ == '__main__':
     print(f"[INFO] Starting... with {max_workers} multiprocess ...")
     print(f"[INFO] Input files dir: {input_folder}")
     print(f"[INFO] Output files dir: {output_folder}")
+    print(f"[INFO] Logging dir: {args.log_folder}")
     run_in_parallel(sub_folders, input_folder, output_folder, max_workers=max_workers)
