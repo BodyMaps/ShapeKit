@@ -130,8 +130,7 @@ target_organs: (example)
   - vertebrae
 ```
 
-> [!IMPORTANT]
-> For detailed configuration setting, please check [the config instructions 🌞](docs/config.md).
+**<mark>For detailed configuration setting, please check [the config instructions 🌞](docs/config.md)</mark>.**.
 
 Before running any commands, please ensure that `config.yaml` is properly configured. But don't worry! **Most of the configurations do not need to be changed at all.**
 </details>
