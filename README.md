@@ -35,7 +35,7 @@ MICCAI 2025 Workshop on Shape in Medical Imaging
   
 # Installation
 
-To set up environment, see INSTALL.md for details.
+To set up environment, see [INSTALL.md](https://github.com/BodyMaps/ShapeKit/blob/main/docs/INSTALL.md) for details.
 
 ```bash
 git clone https://github.com/BodyMaps/ShapeKit.git
@@ -46,21 +46,34 @@ done < requirements.txt
 ```
 
 # Use ShapeKit
-```bash
-export inputs="/path/to/your/input/folder"
-export outputs="/path/to/your/output/folder"
-export CPU_NUM=16
 
-python -W ignore main.py --input_folder $inputs --output_folder $outputs --cpu_count $CPU_NUM --continue_prediction
+<details>
+<summary style="margin-left: 25px;">Organize your data</summary>
+<div style="margin-left: 25px;">
+    
+```bash
+INPUT or OUTPUT
+└── case_001
+    ├── combined_labels.nii.gz (optional)
+    └── segmentations
+            ├── liver.nii.gz
+            ...
+            └── veins.nii.gz
+```
+</div>
+</details>
+
+```bash
+export INPUT="/path/to/your/input/folder"
+export OUTPUT="/path/to/your/output/folder"
+export CPU_NUM=16
+export LOG="logs/folder_named_after_your_task"
+
+python -W ignore main.py --input_folder $INPUT --output_folder $OUTPUT --cpu_count $CPU_NUM --continue_prediction
 ```
 
-Or you can also use `sh bash.sh`.
-
-<!-- > [!IMPORTANT]
-> If the input data contains large CT segmentations (more than 1,000 slices), it’s best to keep `--cpu_count` below 32. -->
-
-## Plug-and-Play Configuration ➡️
-ShapeKit is designed to be *plug-and-play*. You don't need any coding knowledge to get started. Just tell the system which organs you are interested in by listing them in the `config.yaml` file.
+## Plug-and-Play Configuration
+Tell ShapeKit which organs you are interested in by listing them in the `config.yaml` file.
 
 <details>
 <summary style="margin-left: 25px;">Check for details 🔍</summary>
