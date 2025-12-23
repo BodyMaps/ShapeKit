@@ -13,6 +13,8 @@ import logging
 import time
 import csv
 
+import shutil
+
 
 
 """
@@ -187,6 +189,15 @@ def main(input_path, input_folder_name, output_path=None):
     """
     input_path: the folder path
     """
+    
+    # ---- NEW: copy input patient folder to output first ----
+    if output_path is not None:
+        dst_path = os.path.join(output_path, input_folder_name)
+        if not os.path.exists(dst_path):
+            shutil.copytree(input_path, dst_path)
+        else:
+            pass
+    # --------------------------------------------------------
     
     seg_path = os.path.join(input_path, reference_file_name)
     img = nib.load(seg_path)
