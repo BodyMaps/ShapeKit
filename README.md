@@ -26,7 +26,7 @@ Using a parallelized Python workflow, ShapeKit combines, calibrates, and refines
 # Paper
 
 <b>ShapeKit</b> <br/>
-Junqi Liu*, Dongli He*, [Wenxuan Li](https://scholar.google.com/citations?hl=en&user=tpNZM2YAAAAJ), Ningyu Wang, [Alan Yuille](https://www.cs.jhu.edu/~ayuille/), [Zongwei Zhou](https://www.zongweiz.com/) <br/>
+[Junqi Liu*](https://kumakuma2002.github.io/), Dongli He*, [Wenxuan Li](https://scholar.google.com/citations?hl=en&user=tpNZM2YAAAAJ), Ningyu Wang, [Alan Yuille](https://www.cs.jhu.edu/~ayuille/), [Zongwei Zhou](https://www.zongweiz.com/) <br/>
 *Johns Hopkins University* <br/>
 *Equal contribution. <br/>
 MICCAI 2025 Workshop on Shape in Medical Imaging
