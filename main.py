@@ -256,7 +256,7 @@ def process_case_wrapper(args):
         traceback.print_exc()
 
 
-def run_in_parallel(sub_folders, input_folder, output_folder, max_workers=4):
+def run_in_parallel(sub_folders, input_folder, output_folder, max_workers=4, tqdm_ncols=80):
     logging.info(
         f"\n\n[INFO] Start processing {len(sub_folders)} cases with up to {max_workers} workers.\n\n"
     )
@@ -269,6 +269,7 @@ def run_in_parallel(sub_folders, input_folder, output_folder, max_workers=4):
             total=len(args_list),
             desc="Processing cases",
             unit="case",
+            ncols=tqdm_ncols,
         ):
             pass
 ############################## Parallel Execution with multiprocessing.Pool ##############################
@@ -283,6 +284,7 @@ parser.add_argument('--log_folder', type=str, default='./logs/task_001', help='L
 parser.add_argument('--csv', type=str, default=None, help='Guidence csv file telling ShapeKit specific ones for processing')
 parser.add_argument('--cpu_count', type=int, default=cpu_count(), help='Number of CPU cores to use for parallel processing (default: system max)')
 parser.add_argument('--continue_prediction', action="store_true", help='If continue from last processing record')
+parser.add_argument('--tqdm_ncols', type=int, default=80, help='Width of tqdm progress bar in characters')
 args = parser.parse_args()
 
 
@@ -339,4 +341,10 @@ if __name__ == '__main__':
     print(f"[INFO] Input files dir: {input_folder}")
     print(f"[INFO] Output files dir: {output_folder}")
     print(f"[INFO] Logging dir: {args.log_folder}")
-    run_in_parallel(sub_folders, input_folder, output_folder, max_workers=max_workers)
+    run_in_parallel(
+        sub_folders,
+        input_folder,
+        output_folder,
+        max_workers=max_workers,
+        tqdm_ncols=args.tqdm_ncols,
+    )
