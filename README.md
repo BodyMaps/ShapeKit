@@ -69,7 +69,7 @@ export OUTPUT="/path/to/your/output/folder"
 export CPU_NUM=16
 export LOG="logs/folder_named_after_your_task"
 
-python -W ignore main.py --input_folder $inputs --output_folder $outputs --cpu_count $CPU_NUM --log_folder $LOG --continue_prediction
+python -W ignore main.py --input_folder $INPUT --output_folder $OUTPUT --cpu_count $CPU_NUM --log_folder $LOG --continue_prediction
 ```
 
 The processing process will be recorded as `debug.log` and `postprocessing.log`,and are stored under the directory `LOG`.
