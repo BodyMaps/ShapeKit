@@ -32,53 +32,10 @@ Junqi Liu*, Dongli He*, [Wenxuan Li](https://scholar.google.com/citations?hl=en&
 MICCAI 2025 Workshop on Shape in Medical Imaging
 
 <a href='https://www.zongweiz.com/dataset'><img src='https://img.shields.io/badge/Project-Page-Green'></a> <a href='https://www.cs.jhu.edu/~zongwei/publication/liu2025shapekit.pdf'><img src='https://img.shields.io/badge/Paper-PDF-purple'></a> <a href='http://www.cs.jhu.edu/~zongwei/poster/liu2025miccaiw_shapekit.pdf'><img src='https://img.shields.io/badge/Poster-PDF-blue'></a>
-
-# News & Updates
-
-| Date | Description |
-| :--- | :--- |
-| **Dec 23, 2025** | 🎄 Added **Continue Prediction** option & improved **Print UI** |
-| **Jul 30, 2025** | 🤖  **Vertebrae module** inaugurated and added to ShapeKit |
-| **Jun 30, 2025** | 🚀 ShapeKit 1.0 Official Release|
   
 # Installation
 
-Clone the repository and install dependencies:
-
-<!-- <details>
-<summary style="margin-left: 25px;">[Optional 1] Install Anaconda on Linux</summary>
-<div style="margin-left: 25px;"> -->
-    
-<!-- ```bash
-wget https://repo.anaconda.com/archive/Anaconda3-2024.06-1-Linux-x86_64.sh
-bash Anaconda3-2024.06-1-Linux-x86_64.sh -b -p ./anaconda3
-./anaconda3/bin/conda init
-source ~/.bashrc
-```
-</div>
-</details>
-
-<details>
-<summary style="margin-left: 25px;">[Optional 2] Create A Virtual Environment</summary>
-<div style="margin-left: 25px;">
-    
-```bash
-conda create -n kit python=3.12 -y
-conda activate kit
-```
-</div>
-</details>
-
-<details>
-<summary style="margin-left: 25px;">[Optional 3] Merge Updates into Your Local Branch</summary>
-<div style="margin-left: 25px;">
-
-```bash
-git fetch
-git pull
-```
-</div>
-</details> -->
+To set up environment, see INSTALL.md for details.
 
 ```bash
 git clone https://github.com/BodyMaps/ShapeKit.git
