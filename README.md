@@ -106,6 +106,10 @@ Or you can also use `sh bash.sh`.
 ## Plug-and-Play Configuration ➡️
 ShapeKit is designed to be *plug-and-play*. You don't need any coding knowledge to get started. Just tell the system which organs you are interested in by listing them in the `config.yaml` file.
 
+<details>
+<summary style="margin-left: 25px;">Check for details 🔍</summary>
+<div style="margin-left: 25px;">
+
 ### How to choose your targets:
 
 Simply open the `config.yaml`file and list the organs you want to process under target_organs. It’s as easy as checking boxes on a form.
@@ -130,6 +134,7 @@ target_organs: (example)
 > For detailed configuration setting, please check [the config instructions 🌞](docs/config.md).
 
 Before running any commands, please ensure that `config.yaml` is properly configured. But don't worry! **Most of the configurations do not need to be changed at all.**
+</details>
 
 ## Data Structure
 The input and output files will be formated as [BodyMap form](https://huggingface.co/datasets/AbdomenAtlas/AbdomenAtlas1.0Mini/tree/main):
