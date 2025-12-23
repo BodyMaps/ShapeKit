@@ -284,7 +284,7 @@ parser.add_argument('--log_folder', type=str, default='./logs/task_001', help='L
 parser.add_argument('--csv', type=str, default=None, help='Guidence csv file telling ShapeKit specific ones for processing')
 parser.add_argument('--cpu_count', type=int, default=cpu_count(), help='Number of CPU cores to use for parallel processing (default: system max)')
 parser.add_argument('--continue_prediction', action="store_true", help='If continue from last processing record')
-parser.add_argument('--tqdm_ncols', type=int, default=80, help='Width of tqdm progress bar in characters')
+parser.add_argument('--tqdm_ncols', type=int, default=100, help='Width of tqdm progress bar in characters')
 args = parser.parse_args()
 
 
