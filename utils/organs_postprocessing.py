@@ -1,5 +1,5 @@
 from utils.utils import *
-
+import logging
 
 with open('config.yaml', 'r') as f:
     config = yaml.safe_load(f)
@@ -77,7 +77,7 @@ def post_processing_pancreas(segmentation_dict, dice_threshold=0.05):
     return segmentation_dict
 
 
-def post_processing_colon_intestine(segmentation_dict):
+def post_processing_colon_intestine(segmentation_dict, patient_id:str, logger:logging.Logger):
     """
     Post-processing for colons. 
     
@@ -101,7 +101,7 @@ def post_processing_colon_intestine(segmentation_dict):
             cleaned_intestine_mask = remove_small_components(intestine_mask, threshold=intestine_threshold)
             segmentation_dict['intestine'] = cleaned_intestine_mask
     except:
-        print("[INFO] (Colon-Intestine Check Module) Intestine does not exist, skipped ...")
+        logger.info(f"[INFO] {patient_id}, (Colon-Intestine Check Module) Intestine does not exist, skipped ...")
     return segmentation_dict
 
 
@@ -186,7 +186,7 @@ def post_processing_spleen(segmentation_dict):
 #     return reversed_z
 
 
-def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, reference='kidney_left'):
+def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, reference='kidney_left', patient_id=None, logger=None):
     """
     Check some extreme oragn locations for anatomical boundaries.
 
@@ -196,18 +196,18 @@ def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, refe
 
     reference_mask = segmentation_dict.get(reference)
     reversed_z = True
-    print(f"[INFO] (Organ Location Check Module) Checking {organ_name}...")
+    logger.info(f"[INFO] {patient_id}, (Organ Location Check Module) Checking {organ_name}...")
 
     try:
         z_limit = np.mean(np.argwhere(reference_mask)[:, AXIS_Z])
     except:
-        print(f"[INFO] (Organ Location Check Module) Organ location check failed with {reference}, now try liver")
+        logger.info(f"[INFO] {patient_id}, (Organ Location Check Module) Organ location check failed with {reference}, now try liver")
         reference_mask = segmentation_dict.get('liver')
 
         try:
             z_limit = np.mean(np.argwhere(reference_mask)[:, AXIS_Z])
         except:
-            print(f"[INFO] Still failed, skiping ...")
+            logger.info(f"[INFO] {patient_id}, Still failed, skiping ...")
             return organ_mask
         
 
@@ -228,12 +228,12 @@ def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, refe
 
     removed_voxels = np.sum(organ_mask) - np.sum(corrected_organ_mask)
     if removed_voxels > 0:
-        print(f"[INFO] (Organ Location Check Module) Removed {removed_voxels} invalid {organ_name} voxels above reference {reference}")
+        logger.info(f"[INFO] {patient_id}, (Organ Location Check Module) Removed {removed_voxels} invalid {organ_name} voxels above reference {reference}")
 
     return corrected_organ_mask
 
 
-def post_processing_femur(segmentation_dict: dict, axis_map: dict, calibration_standards_mask: np.ndarray) -> dict:
+def post_processing_femur(segmentation_dict: dict, axis_map: dict, calibration_standards_mask: np.ndarray, patient_id:str, logger:logging.Logger) -> dict:
     """
     Post-processing for right and left femur masks stored in a segmentation_dict.
     
@@ -243,12 +243,12 @@ def post_processing_femur(segmentation_dict: dict, axis_map: dict, calibration_s
     femur_left = segmentation_dict.get("femur_left", None)
 
     if femur_right is None or femur_left is None:
-        print("[WARNING] Femur masks not found in segmentation_dict.")
+        logger.info(f"[WARNING] {patient_id}, Femur masks not found in segmentation_dict.")
         return segmentation_dict
 
     # Merge and clean
     femur_mask = ((femur_left > 0) | (femur_right > 0)).astype(np.uint8)
-    femur_mask =  check_organ_location(segmentation_dict, femur_mask, 'femur', axis_map['z'])
+    femur_mask =  check_organ_location(segmentation_dict, femur_mask, 'femur', axis_map['z'], patient_id=patient_id, logger=logger)
 
     # set as 0
     if not np.any(femur_mask):
@@ -281,7 +281,7 @@ def post_processing_femur(segmentation_dict: dict, axis_map: dict, calibration_s
     return segmentation_dict
 
 
-def post_processing_kidney(segmentation_dict: dict, axis_map: dict, calibration_standards_mask: np.ndarray) -> dict:
+def post_processing_kidney(segmentation_dict: dict, axis_map: dict, calibration_standards_mask: np.ndarray, patient_id:str, logger:logging.Logger) -> dict:
     """
     Post-prcessing for right and left kidney.
 
@@ -295,7 +295,7 @@ def post_processing_kidney(segmentation_dict: dict, axis_map: dict, calibration_
     kidney_right = segmentation_dict.get("kidney_right", None)
 
     if kidney_left is None or kidney_right is None:
-        print("[WARNING] Kidney masks not found in segmentation_dict.")
+        logger.info(f"[WARNING] {patient_id}, Kidney masks not found in segmentation_dict.")
         return segmentation_dict
 
     # Combine and clean
@@ -327,8 +327,15 @@ def post_processing_kidney(segmentation_dict: dict, axis_map: dict, calibration_
 
 # the biggest problem is here, how to deal with the extreme-shape problem with lung?
 
-def dongli_lung_constraints(segmentation_dict, axis_map, 
-                              target_label: str = 'lung_left', fallback_label: str = 'colon', min_size: int = 50, overlap_check_threshold: float=0.8):
+def dongli_lung_constraints(
+    segmentation_dict, axis_map, 
+    target_label: str = 'lung_left', 
+    fallback_label: str = 'colon', 
+    min_size: int = 50, 
+    overlap_check_threshold: float=0.8,
+    patient_id: str = 'None',
+    logger: logging.Logger = None,
+    ):
     """
     @ Dongli He 
 
@@ -354,7 +361,6 @@ def dongli_lung_constraints(segmentation_dict, axis_map,
     ).astype(np.uint8)
 
     if not np.any(reference_mask):
-        print(f"[INFO] (Lung Check Module) Reference organs not found for {target_label}. Skipping.")
         return segmentation_dict
 
 
@@ -376,7 +382,7 @@ def dongli_lung_constraints(segmentation_dict, axis_map,
 
         if z_max < z_lower_bound:
             fallback_mask[tuple(coords.T)] = 1
-            print(f"[INFO] (Lung Check Module) Reassigned {target_label} component to {fallback_label}")
+            logger.info(f"[INFO] {patient_id}, (Lung Check Module) Reassigned {target_label} component to {fallback_label}")
         else:
             # double check with overlap ratio
             temp_mask = cc_map == cc_id
@@ -384,7 +390,7 @@ def dongli_lung_constraints(segmentation_dict, axis_map,
             
             if overlap_check > overlap_check_threshold:
                 fallback_mask[tuple(coords.T)] = 1
-                print(f"[INFO] (Lung Check Module) Reassigned {target_label} component to {fallback_label}")
+                logger.info(f"[INFO] {patient_id}, (Lung Check Module) Reassigned {target_label} component to {fallback_label}")
             else:
                 # permitted
                 new_lung_mask[cc_map == cc_id] = 1
@@ -398,7 +404,7 @@ def dongli_lung_constraints(segmentation_dict, axis_map,
 
 
 
-def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_standards_mask: np.ndarray) -> dict:
+def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_standards_mask: np.ndarray, patient_id: str, logger: logging.Logger) -> dict:
     """
     Post-prcessing for right and left lung.
 
@@ -414,8 +420,8 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
     
     # for the case lung is not in the abdominal reference area
     segmentation_dict_new = deepcopy(segmentation_dict)
-    segmentation_dict_new = dongli_lung_constraints(segmentation_dict_new, axis_map, 'lung_left')
-    segmentation_dict_new = dongli_lung_constraints(segmentation_dict_new, axis_map, 'lung_right')
+    segmentation_dict_new = dongli_lung_constraints(segmentation_dict_new, axis_map, 'lung_left', patient_id=patient_id, logger=logger)
+    segmentation_dict_new = dongli_lung_constraints(segmentation_dict_new, axis_map, 'lung_right', patient_id=patient_id, logger=logger)
     
     # double-check if wrongly reassigned by location of colon and liver
     if np.sum(segmentation_dict_new.get('lung_left')) == 0 and np.sum(segmentation_dict_new.get('lung_right')) == 0 :
@@ -429,11 +435,11 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
         z_check_bound = np.mean(colon_z)
         z_liver = np.mean(liver_z)
         if z_liver < z_check_bound:
-            print("[INFO] (Lung Check Module) Ineffective lung reassignment found, fall back ...")
+            logger.info(f"[INFO] {patient_id}, (Lung Check Module) Ineffective lung reassignment found, fall back ...")
             del segmentation_dict_new
             gc.collect()
         else:
-            print("[INFO] (Lung Check Module) No valid lung remaining after reassignment. Skip lung post-processing ...")
+            logger.info(f"[INFO] {patient_id}, (Lung Check Module) No valid lung remaining after reassignment. Skip lung post-processing ...")
             return segmentation_dict_new
     else:
         # continues
@@ -443,7 +449,7 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
     lung_right = segmentation_dict.get("lung_right", None)
 
     if lung_left is None or lung_right is None:
-        print("[WARNING] (Lung Check Module) Missing lung_left or lung_right in segmentation_dict.")
+        logger.info(f"[WARNING] {patient_id}, (Lung Check Module) Missing lung_left or lung_right in segmentation_dict.")
         return segmentation_dict
 
     lung_mask = ((lung_left > 0) | (lung_right > 0)).astype(np.uint16)
@@ -456,7 +462,7 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
     # Fallback split if unbalanced
     volume_ratio = np.sum(right_mask) / (np.sum(left_mask) + 1e-5)
     if volume_ratio > 2 or volume_ratio < 0.5:
-        print("[INFO] (Lung Check Module) Unbalanced lung split detected. Using fallback split_organ().")
+        logger.info(f"[INFO] {patient_id}, (Lung Check Module) Unbalanced lung split detected. Using fallback split_organ().")
         right_mask, left_mask = split_organ(mask=lung_mask, axis=axis_map['x'])
 
     # Align left/right assignment based on liver position
@@ -474,7 +480,7 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
 
 
 
-def post_processing_bladder_prostate(segmentation_dict:dict, segmentation:np.array, axis=2):
+def post_processing_bladder_prostate(segmentation_dict:dict, segmentation:np.array, patient_id: str, logger: logging.Logger, axis=2):
     """
     Post-processing for bladder and prostate.
 
@@ -495,8 +501,12 @@ def post_processing_bladder_prostate(segmentation_dict:dict, segmentation:np.arr
             continue
         
         # check location
-        cleaned_mask = check_organ_location(segmentation_dict, organ_mask, 
-                                            organ_name=organ, AXIS_Z=axis)
+        cleaned_mask = check_organ_location(
+            segmentation_dict, 
+            organ_mask, 
+            organ_name=organ,
+            AXIS_Z=axis,
+            patient_id=patient_id, logger=logger)
 
         segmentation_dict[organ] = cleaned_mask
         
@@ -532,7 +542,7 @@ def post_processing_adrenal_gland(segmentation_dict: dict, axis_map: dict, calib
     adrenal_right = segmentation_dict.get("adrenal_gland_right", None)
 
     if adrenal_left is None or adrenal_right is None:
-        print("[WARNING] Missing adrenal gland masks in segmentation_dict.")
+        # print("[WARNING] Missing adrenal gland masks in segmentation_dict.")
         return segmentation_dict
 
     adrenal_mask = ((adrenal_left > 0) | (adrenal_right > 0)).astype(np.uint8)
@@ -555,7 +565,7 @@ def post_processing_adrenal_gland(segmentation_dict: dict, axis_map: dict, calib
     return segmentation_dict
 
 
-def reassign_false_positives(segmentation_dict: dict, organ_adjacency_map: dict, check_size_threshold=2000):
+def reassign_false_positives(segmentation_dict: dict, organ_adjacency_map: dict, patient_id:str, logger:logging.Logger, check_size_threshold=2000):
     """
     Reassign false positives between anatomically adjacent organs.
 
@@ -632,7 +642,7 @@ def reassign_false_positives(segmentation_dict: dict, organ_adjacency_map: dict,
                 if adj_organ not in segmentation_dict:
                     segmentation_dict[adj_organ] = np.zeros_like(mask, dtype=bool)
                 segmentation_dict[adj_organ][cc_mask] = True
-                print(f"[INFO] (FP Check Module) Reassigned component from {organ} → {adj_organ}")
+                logger.info(f"[INFO] {patient_id}, (FP Check Module) Reassigned component from {organ} → {adj_organ}")
             else:
                 updated_mask[cc_mask] = True
             

@@ -101,7 +101,7 @@ def split_overmerged_triplets(merged_segmentation, size_dict, label_z_centers, c
             for voxel in coords_lower:
                 merged_segmentation[tuple(voxel)] = next_new_label  # assign new label
 
-            print(f"[INFO] (Vertebrae Module) Label {i0} was too large → split into {i0} (upper) + {next_new_label} (lower)")
+            # print(f"[INFO] (Vertebrae Module) Label {i0} was too large → split into {i0} (upper) + {next_new_label} (lower)")
 
             # Update label dictionaries
             size_dict[i0] = len(coords_upper)
@@ -147,7 +147,7 @@ def relabel_by_z_order(segmentation, label_z_centers, start_label=1):
         label_mapping[old_id] = new_id
         new_label_z_centers[new_id] = z_center  # keep the same z_center, but update label key
 
-    print(f"[INFO]  (Vertebrae Module) Relabeled {len(label_mapping)} labels from Z-bottom to Z-top.")
+    # print(f"[INFO]  (Vertebrae Module) Relabeled {len(label_mapping)} labels from Z-bottom to Z-top.")
     return new_segmentation, new_label_z_centers
 
 
@@ -176,7 +176,7 @@ def balance_protrusion(segmentation, label_z_centers, min_cc_voxel=1000):
                 continue
             z_median = np.median(coords[:, 2])
             if z_median > z_B:
-                print(f"[INFO] Sub-region of label {A} protrudes into {B}, reassigning.")
+                # print(f"[INFO] Sub-region of label {A} protrudes into {B}, reassigning.")
                 for voxel in coords:
                     corrected_seg[tuple(voxel)] = B
 
@@ -190,7 +190,7 @@ def balance_protrusion(segmentation, label_z_centers, min_cc_voxel=1000):
                 continue
             z_median = np.median(coords[:, 2])
             if z_median < z_A:
-                print(f"[INFO] Sub-region of label {B} drops into {A}, reassigning.")
+                # print(f"[INFO] Sub-region of label {B} drops into {A}, reassigning.")
                 for voxel in coords:
                     corrected_seg[tuple(voxel)] = A
 
@@ -204,7 +204,7 @@ def reallocate_based_on_size(segmentation):
     size_dict = {}
     label_z_centers = {}
     unique_labels = np.unique(segmentation)
-    print(unique_labels)
+    
     for label_id in unique_labels:
         if label_id == 0:
             continue
@@ -248,7 +248,7 @@ def reallocate_based_on_size(segmentation):
                     min_dist = dist
                     nearest_label = other_id
 
-            print(f"[INFO] (Vertebrae Module) Label {label_id} merged into {nearest_label}")
+            # print(f"[INFO] (Vertebrae Module) Label {label_id} merged into {nearest_label}")
             merged_segmentation[merged_segmentation == label_id] = nearest_label
 
             size_dict[nearest_label] += size_dict[label_id]
@@ -257,7 +257,7 @@ def reallocate_based_on_size(segmentation):
         
 
     # Step 3: Find the unusual large one and split into 2 parts, forming new label
-    print(f"[INFO] (Vertebrae Module) Total {split_counter} splits need to be made")
+    # print(f"[INFO] (Vertebrae Module) Total {split_counter} splits need to be made")
     # now we examine the remaining labels we use triplet. i-2, i-1. i. when i is larger than the 1.5*min(size(i-2), size(i-1)), then need split
     split_segmentation, label_z_centers = split_overmerged_triplets(
         merged_segmentation, 
@@ -426,7 +426,7 @@ def supress_non_largest_components(img, default_val = 0):
     return img_mod
 
 
-def postprocessing_vertebrae(segmentation_dict: dict):
+def postprocessing_vertebrae(patiend_id:str, segmentation_dict: dict, logger):
     """
     Post-processing for vertebrae labels.
 
@@ -442,7 +442,7 @@ def postprocessing_vertebrae(segmentation_dict: dict):
     # Assign fixed anatomical label IDs
     for label_id, vertebra_name in all_labels.items():
         if vertebra_name not in segmentation_dict:
-            print(f"[INFO] Missing: {vertebra_name}, skipping...")
+            logger.info(f"[INFO] {patiend_id}, Missing: {vertebra_name}, skipping...")
             continue
         mask = segmentation_dict[vertebra_name]
         vertebrae_segmentations[mask > 0] = label_id
