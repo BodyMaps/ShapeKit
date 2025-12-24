@@ -463,7 +463,11 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
     volume_ratio = np.sum(right_mask) / (np.sum(left_mask) + 1e-5)
     if volume_ratio > 2 or volume_ratio < 0.5:
         logger.info(f"[INFO] {patient_id}, (Lung Check Module) Unbalanced lung split detected. Using fallback split_organ().")
-        right_mask, left_mask = split_organ(mask=lung_mask, axis=axis_map['x'])
+        try:
+            right_mask, left_mask = split_organ(mask=lung_mask, axis=axis_map['x'])
+        except:
+            logger.info(f"[INFO] {patient_id}, (Lung Check Module) Fallback split_organ() failed, skip lung post-processing ...")
+
 
     # Align left/right assignment based on liver position
     right_mask, left_mask = reassign_left_right_based_on_liver(
