@@ -71,6 +71,21 @@ def check_unprocessed_cases(input_folder: str, output_folder: str, csv_path: str
     return unprocessed
 
 
+def read_cases_from_csv(csv_path, key="Inference ID"):
+    """
+    Only the cases listed in the csv will be processed
+    """
+    cases = []
+    with open(csv_path, newline="") as f:
+        reader = csv.DictReader(f)
+        if key not in reader.fieldnames:
+            raise ValueError(f"[ERROR] CSV must contain column '{key}'")
+        for row in reader:
+            cases.append(row[key])
+    return set(cases)
+
+
+
 
 
 def combine_segmentation_dict(segmentation_dict: dict, class_map: dict) -> np.ndarray:
@@ -322,19 +337,28 @@ if __name__ == '__main__':
     sub_folders = [sf for sf in os.listdir(input_folder) if sf != '.DS_Store']  
     sub_folders.sort()
 
-    if args.continue_prediction:
-        # generate continue.csv and only run those
-        sub_folders_filtered = check_unprocessed_cases(
-            input_folder=input_folder,
-            output_folder=output_folder,
-            csv_path="continue.csv",
-        )
+    if args.csv is not None:
+        csv_cases = read_cases_from_csv(args.csv)
+        before = len(sub_folders)
+        sub_folders = set(sub_folders) & csv_cases
+        after = len(sub_folders)
+        print(f"[INFO] CSV filtering enabled: {after}/{before} cases kept")
 
-        len1 = len(sub_folders_filtered)
-        len2 = len(sub_folders)
-        print(f"[INFO] Resume from last prediction process, I will only work on {len1} out of total {len2} cases!")
-        sub_folders = sub_folders_filtered
-        sub_folders.sort()
+
+    if args.continue_prediction:
+        continue_cases = set(
+            check_unprocessed_cases(
+                input_folder=input_folder,
+                output_folder=output_folder,
+                csv_path="continue.csv",
+            )
+        )
+        before = len(sub_folders)
+        sub_folders = sub_folders & continue_cases
+        after = len(sub_folders)
+        print(
+            f"[INFO] Resume enabled: {after}/{before} cases remain after continue.csv"
+        )
 
     max_workers = min(args.cpu_count, len(sub_folders), multiprocessing.cpu_count() - 1)
     print(f"[INFO] Starting... with {max_workers} multiprocess ...")
