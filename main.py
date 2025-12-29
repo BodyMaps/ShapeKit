@@ -336,11 +336,13 @@ if __name__ == '__main__':
 
     sub_folders = [sf for sf in os.listdir(input_folder) if sf != '.DS_Store']  
     sub_folders.sort()
+    sub_folders = set(sub_folders)
 
+    
     if args.csv is not None:
         csv_cases = read_cases_from_csv(args.csv)
         before = len(sub_folders)
-        sub_folders = set(sub_folders) & csv_cases
+        sub_folders = sub_folders & csv_cases
         after = len(sub_folders)
         print(f"[INFO] CSV filtering enabled: {after}/{before} cases kept")
 
