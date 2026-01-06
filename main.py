@@ -220,7 +220,8 @@ def main(input_path, input_folder_name, output_path=None):
     segmentation_dict = read_all_segmentations(
         folder_path=input_path,
         organ_list=organ_list,
-        subfolder_name=subfolder_name
+        subfolder_name=subfolder_name,
+        target_axcodes=nib.aff2axcodes(img.affine) 
     )
 
     segmentation = combine_segmentation_dict(segmentation_dict, class_map)
@@ -366,7 +367,7 @@ if __name__ == '__main__':
     print(f"[INFO] Starting... with {max_workers} multiprocess ...")
     print(f"[INFO] Input files dir: {input_folder}")
     print(f"[INFO] Output files dir: {output_folder}")
-    print(f"[INFO] Logging dir: {args.log_folder}")
+    print(f"[INFO] Logging dir: {args.log_folder}\n\n")
     run_in_parallel(
         sub_folders,
         input_folder,
