@@ -156,3 +156,35 @@ organ_mask =  check_organ_location(segmentation_dict, organ_mask, 'organ_name', 
 </details>
 
 **Applicable to:** `bladder`, `femurs`, `prostate`
+---
+
+## Vertebrae re-identification (anatomic-consistency)
+
+`vertebrae_reidentification.reidentify_vertebrae_dict(segmentation_dict, reference_img, logger=None, patient_id="")`
+
+A spacing-aware, **stable** replacement for the size-based
+`reallocate_based_on_size` step. It targets the dominant vertebra error —
+level **mis-identification** in the mid / thoraco-lumbar spine (the network
+segments the bone but assigns the wrong level, collapsing per-level Dice in the
+middle while the anchored ends stay high).
+
+**Method:** isolate vertebral-body cores with a physical distance transform and
+grow them back over all bone (ordered instances); anchor the sequence by
+offset-voting (the two anchored ends must agree — the *anatomic consistency
+cycle*); keep the model's own mask on every already-correct vertebra and rebuild
+only the mis-identified span (plus a small superior buffer) with a watershed of
+the shifted cores; keep the largest component per level and fill holes. The
+result is accepted only if every level is strictly ordered along the spine,
+otherwise the model labels are kept unchanged (non-destructive).
+
+**Parameters:**
+- `segmentation_dict` (`dict`): `{vertebra_name: np.ndarray mask}`.
+- `reference_img` (`nib.Nifti1Image`): supplies the affine (voxel spacing / axes).
+- `logger`, `patient_id`: optional logging.
+
+**Returns:** the `segmentation_dict` with corrected vertebra masks.
+
+**Enable:** add `vertebrae` to `target_organs` in `config.yaml`; `main.py` passes
+the reference image through automatically.
+
+**Applicable to:** all 24 vertebra levels (`vertebrae_L5` … `vertebrae_C1`).
