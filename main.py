@@ -194,6 +194,7 @@ def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.arra
             patient_id,
             segmentation_dict,
             logger=logger,
+            reference_img=reference_img,   # affine -> spacing/axes for re-identification
         )
 
     return segmentation_dict

@@ -9,10 +9,13 @@ from scipy.ndimage import label, binary_dilation, binary_erosion
 from skimage.measure import label, regionprops
 from scipy import ndimage
 from .utils import remove_small_components, fill_holes
+from .vertebrae_reidentification import reidentify_vertebrae_dict
 
 
 #### @jliu452 postprocessing codes for the vertabreas part
-#### TODO Not finished warning
+#### Anatomic-consistency re-identification added by @farhatmasood (see
+#### vertebrae_reidentification.py) — a stable replacement for the size-based
+#### reallocate_based_on_size step.
 
 
 # the general mapping
@@ -426,16 +429,25 @@ def supress_non_largest_components(img, default_val = 0):
     return img_mod
 
 
-def postprocessing_vertebrae(patiend_id:str, segmentation_dict: dict, logger):
+def postprocessing_vertebrae(patiend_id:str, segmentation_dict: dict, logger,
+                             reference_img=None):
     """
     Post-processing for vertebrae labels.
 
-    Steps:
-        1. Reallocate label IDs based on size (e.g. largest → most important label)
-        2. Suppress all non-largest connected components
-        3. Fill holes within vertebrae volumes
-    """
+    Preferred path (``reference_img`` supplied): anatomic-consistency
+    **re-identification** (`vertebrae_reidentification.reidentify_vertebrae_dict`)
+    — a spacing-aware, stable replacement for the size-based reallocation. It
+    keeps the model's Dice-optimal mask on every already-correct vertebra and
+    rebuilds only the mis-identified span, then keeps the largest component per
+    level and fills holes.
 
+    Legacy path (no affine available): the earlier size/adjacency heuristics.
+    """
+    if reference_img is not None:
+        return reidentify_vertebrae_dict(
+            segmentation_dict, reference_img, logger=logger, patient_id=patiend_id)
+
+    # --------- legacy path (kept for backward compatibility) ----------
     # TODO WARNING fixing .... reallocate_based_on_size()
     vertebrae_segmentations = np.zeros_like(next(iter(segmentation_dict.values())), dtype=np.uint8)
 
