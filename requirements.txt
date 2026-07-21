@@ -27,3 +27,4 @@ packaging
 scikit-learn
 scikit-image
 jsonargparse
+antspyx
