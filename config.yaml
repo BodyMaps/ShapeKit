@@ -90,3 +90,57 @@ organ_adjacency_map:
 affine_reference_file_name: liver.nii.gz
 
 if_save_combined_label: True
+
+# Vertebrae warmup postprocessing configuration (optional)
+# Set processing_mode to "warmup" to enable advanced registration-based warmup training
+# Set to "legacy" (default) for basic vertebrae postprocessing
+vertebrae:
+  processing_mode: "legacy"  # "warmup" or "legacy"
+
+  # Required for warmup mode: paths to reference atlas CT and labels
+  # These are typically BDMAP_00000031 segmentations
+  # fixed_reference_ct: "/path/to/atlas/ct.nii.gz"
+  # fixed_reference_labels: "/path/to/atlas/labels.nii.gz"
+
+  # Vertebrae count: 7 (cervical), 12 (thoracic), 5 (lumbar), 24 (full C1-L5)
+  target_count: 24
+
+  # Warmup pipeline configuration (only used when processing_mode: "warmup")
+  warmup_config:
+    cleanup:
+      min_fragment_voxels: 64
+      min_fragment_ratio: 0.01
+
+    registration:
+      mask_dilate_mm: 6.0
+      crop_margin_voxels: 24
+      affine_mask_metric: "meansquares"
+      enable_rigid_foreground_stage: true
+      label_weight: 1.0
+      use_centroid_anchor: true
+      anchor_axis: "all"  # or "z" for z-axis only
+      centroid_shift_clamp_voxels: 40
+      reg_iterations: [30, 10, 0]
+      grad_step: 0.05
+      flow_sigma: 4.0
+      total_sigma: 2.0
+
+    relabel:
+      min_overlap_voxels: 25
+      centroid_z_weight: 2.5
+      overlap_weight: 0.15
+      connectivity: 3
+
+    finalize:
+      min_fragment_voxels: 20
+      split_size_ratio: 0.35
+      split_distance_ratio: 1.5
+      pair_small_ratio: 0.70
+      pair_sum_min_ratio: 0.70
+      pair_sum_max_ratio: 1.40
+      nearby_spacing_ratio: 0.80
+      max_edit_label: 12
+      low_label_aggressiveness: 0.90
+      high_label_distance_penalty: 1.60
+      target_labels: 24
+      connectivity: 3

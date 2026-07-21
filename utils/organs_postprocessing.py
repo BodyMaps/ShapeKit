@@ -657,4 +657,161 @@ def reassign_false_positives(segmentation_dict: dict, organ_adjacency_map: dict,
         gc.collect()
 
 
+def process_vertebrae(
+    patient_id: str,
+    segmentation_dict: dict,
+    logger: logging.Logger,
+    output_dir: str = None,
+    fixed_ct_path: str = None,
+    fixed_labels_path: str = None,
+    moving_ct_path: str = None,
+):
+    """
+    Route vertebrae postprocessing to warmup or legacy pipeline.
+
+    Uses config.yaml vertebrae.processing_mode to determine which pipeline:
+    - "warmup": Advanced registration-based processing with ANTsPy
+    - "legacy": Original simpler postprocessing (default)
+
+    Args:
+        patient_id: Patient identifier
+        segmentation_dict: Dictionary of segmentation masks
+        logger: Logger instance
+        output_dir: Output directory for warmup mode intermediate files
+        fixed_ct_path: Path to fixed (atlas) CT for warmup mode
+        fixed_labels_path: Path to fixed (atlas) labels for warmup mode
+        moving_ct_path: Path to moving (input) CT for warmup mode
+
+    Returns:
+        Updated segmentation_dict with processed vertebrae
+    """
+    from utils.vertebrae_postprocessing import postprocessing_vertebrae
+
+    # Check if warmup mode is enabled
+    vertebrae_cfg = config.get("vertebrae", {})
+    processing_mode = vertebrae_cfg.get("processing_mode", "legacy")
+
+    if processing_mode == "warmup":
+        # Try to import warmup module
+        try:
+            from utils.vertebrae_warmup_postprocessing import process_vertebrae_warmup
+            from utils.vertebrae_warmup_postprocessing import (
+                CleanupConfig,
+                RegistrationConfig,
+                RelabelConfig,
+                FinalizeConfig,
+            )
+        except ImportError:
+            logger.warning("[WARNING] ANTsPy/warmup module not available, falling back to legacy vertebrae processing")
+            return postprocessing_vertebrae(patient_id, segmentation_dict, logger)
+
+        # Validate required paths for warmup mode
+        if not all([fixed_ct_path, fixed_labels_path, moving_ct_path, output_dir]):
+            logger.warning(
+                "[WARNING] Warmup mode requires fixed_ct_path, fixed_labels_path, moving_ct_path, and output_dir. "
+                "Falling back to legacy processing."
+            )
+            return postprocessing_vertebrae(patient_id, segmentation_dict, logger)
+
+        try:
+            # Prepare warmup configuration
+            warmup_cfg = vertebrae_cfg.get("warmup_config", {})
+            target_count = vertebrae_cfg.get("target_count", 24)
+
+            cleanup_cfg = CleanupConfig(
+                min_fragment_voxels=warmup_cfg.get("cleanup", {}).get("min_fragment_voxels", 64),
+                min_fragment_ratio=warmup_cfg.get("cleanup", {}).get("min_fragment_ratio", 0.01),
+            )
+
+            reg_cfg = warmup_cfg.get("registration", {})
+            registration_cfg = RegistrationConfig(
+                mask_dilate_mm=reg_cfg.get("mask_dilate_mm", 6.0),
+                crop_margin_voxels=reg_cfg.get("crop_margin_voxels", 24),
+                affine_mask_metric=reg_cfg.get("affine_mask_metric", "meansquares"),
+                enable_rigid_foreground_stage=reg_cfg.get("enable_rigid_foreground_stage", True),
+                label_weight=reg_cfg.get("label_weight", 1.0),
+                use_centroid_anchor=reg_cfg.get("use_centroid_anchor", True),
+                anchor_axis=reg_cfg.get("anchor_axis", "all"),
+                centroid_shift_clamp_voxels=reg_cfg.get("centroid_shift_clamp_voxels", 40),
+                reg_iterations=tuple(reg_cfg.get("reg_iterations", [30, 10, 0])),
+                grad_step=reg_cfg.get("grad_step", 0.05),
+                flow_sigma=reg_cfg.get("flow_sigma", 4.0),
+                total_sigma=reg_cfg.get("total_sigma", 2.0),
+            )
+
+            rel_cfg = warmup_cfg.get("relabel", {})
+            relabel_cfg = RelabelConfig(
+                min_overlap_voxels=rel_cfg.get("min_overlap_voxels", 25),
+                centroid_z_weight=rel_cfg.get("centroid_z_weight", 2.5),
+                overlap_weight=rel_cfg.get("overlap_weight", 0.15),
+                connectivity=rel_cfg.get("connectivity", 3),
+            )
+
+            fin_cfg = warmup_cfg.get("finalize", {})
+            finalize_cfg = FinalizeConfig(
+                min_fragment_voxels=fin_cfg.get("min_fragment_voxels", 20),
+                split_size_ratio=fin_cfg.get("split_size_ratio", 0.35),
+                split_distance_ratio=fin_cfg.get("split_distance_ratio", 1.5),
+                pair_small_ratio=fin_cfg.get("pair_small_ratio", 0.70),
+                pair_sum_min_ratio=fin_cfg.get("pair_sum_min_ratio", 0.70),
+                pair_sum_max_ratio=fin_cfg.get("pair_sum_max_ratio", 1.40),
+                nearby_spacing_ratio=fin_cfg.get("nearby_spacing_ratio", 0.80),
+                max_edit_label=fin_cfg.get("max_edit_label", 12),
+                low_label_aggressiveness=fin_cfg.get("low_label_aggressiveness", 0.90),
+                high_label_distance_penalty=fin_cfg.get("high_label_distance_penalty", 1.60),
+                target_labels=target_count,
+                connectivity=fin_cfg.get("connectivity", 3),
+            )
+
+            # Combine individual vertebrae masks into single array (labels 1 to target_count)
+            vertebrae_mask = np.zeros_like(next(iter(segmentation_dict.values())), dtype=np.int16)
+            vertebrae_names = [k for k in segmentation_dict.keys() if k.startswith("vertebrae_")]
+            for idx, vert_name in enumerate(sorted(vertebrae_names), start=1):
+                if idx <= target_count:
+                    vertebrae_mask[segmentation_dict[vert_name] > 0] = idx
+
+            logger.info(f"[INFO] {patient_id}, Processing {len([n for n in vertebrae_names if segmentation_dict[n].any()])} vertebrae with warmup mode")
+
+            # Run warmup processing
+            final_labels, audit_trails = process_vertebrae_warmup(
+                input_labels=vertebrae_mask,
+                fixed_ct_path=fixed_ct_path,
+                fixed_labels_path=fixed_labels_path,
+                moving_ct_path=moving_ct_path,
+                output_dir=output_dir,
+                target_vertebrae_count=target_count,
+                cleanup_cfg=cleanup_cfg,
+                registration_cfg=registration_cfg,
+                relabel_cfg=relabel_cfg,
+                finalize_cfg=finalize_cfg,
+                verbose=False,
+            )
+
+            # Save audit trails to CSV files
+            vertebrae_output_dir = os.path.join(output_dir, "vertebrae")
+            os.makedirs(vertebrae_output_dir, exist_ok=True)
+
+            for trail_name, trail_rows in audit_trails.items():
+                csv_path = os.path.join(vertebrae_output_dir, f"{trail_name}.csv")
+                with open(csv_path, "w") as f:
+                    f.write("\n".join(trail_rows) + "\n")
+
+            # Convert final labels back to segmentation_dict format
+            for label_id in range(1, target_count + 1):
+                vert_name = f"vertebrae_{label_id}"
+                if label_id <= len(vertebrae_names):
+                    mask = (final_labels == label_id).astype(np.uint8)
+                    segmentation_dict[vertebrae_names[label_id - 1]] = mask
+
+            logger.info(f"[INFO] {patient_id}, Warmup vertebrae processing completed")
+            return segmentation_dict
+
+        except Exception as e:
+            logger.error(f"[ERROR] {patient_id}, Warmup processing failed: {e}. Falling back to legacy")
+            return postprocessing_vertebrae(patient_id, segmentation_dict, logger)
+
+    else:
+        # Use legacy vertebrae processing (default)
+        return postprocessing_vertebrae(patient_id, segmentation_dict, logger)
+
     return segmentation_dict

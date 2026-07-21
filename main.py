@@ -3,6 +3,7 @@ import multiprocessing
 from multiprocessing import cpu_count
 from utils.organs_postprocessing import *
 from utils.vertebrae_postprocessing import postprocessing_vertebrae
+from utils.organs_postprocessing import process_vertebrae
 import logging
 import yaml
 import traceback
@@ -104,8 +105,7 @@ def combine_segmentation_dict(segmentation_dict: dict, class_map: dict) -> np.nd
     return combined
 
 
-def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.array, target_organs: set, patient_id: str, logger: logging.Logger,
-):
+def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.array, target_organs: set, patient_id: str, logger: logging.Logger, **kwargs):
     """
     Apply organ-specific post-processing functions to the segmentation dict
     based on user-defined target organs.
@@ -190,10 +190,15 @@ def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.arra
         )
 
     if 'vertebrae' in target_organs:
-        segmentation_dict = postprocessing_vertebrae(
-            patient_id,
-            segmentation_dict,
+        # Use new wrapper that supports both warmup and legacy modes
+        segmentation_dict = process_vertebrae(
+            patient_id=patient_id,
+            segmentation_dict=segmentation_dict,
             logger=logger,
+            output_dir=kwargs.get('output_dir'),
+            fixed_ct_path=kwargs.get('fixed_ct_path'),
+            fixed_labels_path=kwargs.get('fixed_labels_path'),
+            moving_ct_path=kwargs.get('moving_ct_path'),
         )
 
     return segmentation_dict
@@ -227,13 +232,34 @@ def main(input_path, input_folder_name, output_path=None):
     segmentation = combine_segmentation_dict(segmentation_dict, class_map)
     patient_id = os.path.basename(input_path)
 
+    # Prepare optional parameters for vertebrae warmup mode
+    warmup_kwargs = {}
+    if 'vertebrae' in target_organs:
+        vertebrae_cfg = config.get("vertebrae", {})
+        if vertebrae_cfg.get("processing_mode") == "warmup":
+            # Warmup mode requires atlas paths (typically from config or fixed locations)
+            vertebrae_cfg = config.get("vertebrae", {})
+            fixed_ct = vertebrae_cfg.get("fixed_reference_ct")
+            fixed_labels = vertebrae_cfg.get("fixed_reference_labels")
+            # Moving CT is the input CT in the patient folder
+            moving_ct = seg_path.replace(reference_file_name.split('/')[-1], "ct.nii.gz")
+
+            if fixed_ct and fixed_labels:
+                warmup_kwargs = {
+                    'output_dir': output_path,
+                    'fixed_ct_path': fixed_ct,
+                    'fixed_labels_path': fixed_labels,
+                    'moving_ct_path': moving_ct,
+                }
+
     postprocessed_segmentation_dict = process_organs(
-        segmentation_dict, 
+        segmentation_dict,
         img,
         segmentation,
         target_organs,
         patient_id = patient_id,
         logger = logging,
+        **warmup_kwargs,
     )
     
     save_folder_path = os.path.join(output_path, input_folder_name)
