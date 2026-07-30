@@ -90,3 +90,9 @@ organ_adjacency_map:
 affine_reference_file_name: liver.nii.gz
 
 if_save_combined_label: True
+
+# optional read-only vertebral instance audit
+vertebrae_instance_analysis:
+  enabled: false
+  output_dir_name: vertebrae_analysis
+  use_reference_as_ct: false

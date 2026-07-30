@@ -3,6 +3,11 @@ import multiprocessing
 from multiprocessing import cpu_count
 from utils.organs_postprocessing import *
 from utils.vertebrae_postprocessing import postprocessing_vertebrae
+from utils.vertebrae_instance_audit import (
+    ordered_vertebral_anatomical_names,
+    parse_vertebrae_instance_audit_config,
+    run_vertebrae_instance_audit,
+)
 import logging
 import yaml
 import traceback
@@ -32,6 +37,14 @@ organ_list = list(class_map.values())
 reference_file_name =  affine_reference_file_name # affine info
 data_type = np.int16
 save_combined_label_bool = bool(config['if_save_combined_label'])
+vertebrae_audit_config = parse_vertebrae_instance_audit_config(
+    config.get('vertebrae_instance_analysis')
+)
+ordered_vertebral_names = (
+    ordered_vertebral_anatomical_names(class_map.values())
+    if vertebrae_audit_config.enabled
+    else ()
+)
 
 ##############################################################
 
@@ -224,9 +237,18 @@ def main(input_path, input_folder_name, output_path=None):
         target_axcodes=nib.aff2axcodes(img.affine) 
     )
 
-    segmentation = combine_segmentation_dict(segmentation_dict, class_map)
     patient_id = os.path.basename(input_path)
+    run_vertebrae_instance_audit(
+        segmentation_dict,
+        reference_img=img,
+        ordered_anatomical_names=ordered_vertebral_names,
+        output_root=output_path,
+        patient_id=patient_id,
+        config=vertebrae_audit_config,
+        logger=logging,
+    )
 
+    segmentation = combine_segmentation_dict(segmentation_dict, class_map)
     postprocessed_segmentation_dict = process_organs(
         segmentation_dict, 
         img,

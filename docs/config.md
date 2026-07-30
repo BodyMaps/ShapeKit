@@ -66,3 +66,45 @@
                 ...
                 └── veins.nii.gz
     ```
+
+7. `vertebrae_instance_analysis`: optional read-only vertebral-instance audit.
+   The block is disabled by default:
+
+    ```yaml
+    vertebrae_instance_analysis:
+      enabled: false
+      output_dir_name: vertebrae_analysis
+      use_reference_as_ct: false
+    ```
+
+   When enabled, ShapeKit analyzes the anatomical-name vertebral masks before
+   any organ or vertebral postprocessing and writes one canonical JSON report
+   per case:
+
+    ```
+    OUTPUT
+    ├── case_001
+    │   └── segmentations
+    └── vertebrae_analysis
+        └── case_001.json
+    ```
+
+   The report is diagnostic only. It never changes, deletes, fills, merges, or
+   relabels segmentation voxels, and it is not used by the existing
+   postprocessing pipeline.
+
+   `use_reference_as_ct` must remain `false` unless
+   `affine_reference_file_name` identifies a voxel-aligned Computed Tomography
+   image with finite intensity values. ShapeKit does not infer CT provenance
+   from a filename or intensity heuristic. If CT use is explicitly requested
+   but the loaded reference fails the shape or finite-value checks, the audit
+   logs a warning and falls back to geometry-only evidence.
+
+   The audit directory name must be one relative path component. Configuration
+   mistakes stop batch startup with a clear error. Per-case analyzer or audit
+   writing failures are logged with a traceback, stale or partial audit output
+   is removed, and segmentation processing continues unchanged.
+
+   Audit files are not backfilled for cases excluded by
+   `--continue_prediction`; rerun without resume filtering to audit previously
+   completed cases.
