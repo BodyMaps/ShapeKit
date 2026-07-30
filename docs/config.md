@@ -101,9 +101,19 @@
    logs a warning and falls back to geometry-only evidence.
 
    The audit directory name must be one relative path component. Configuration
-   mistakes stop batch startup with a clear error. Per-case analyzer or audit
-   writing failures are logged with a traceback, stale or partial audit output
-   is removed, and segmentation processing continues unchanged.
+   mistakes stop batch startup with a clear error. An existing symbolic link
+   is never accepted as the audit directory, and the resolved audit directory
+   must remain below the resolved output root.
+
+   Each invocation owns only its uniquely named temporary file. A successful
+   report is atomically replaced and represents the most recent successfully
+   completed write. A failed invocation is logged with a traceback and does
+   not remove or truncate an existing successful report, including one written
+   concurrently by another invocation. Segmentation processing continues
+   unchanged after an audit failure.
+
+   Audit JSON files currently retain the owner-only permissions created by
+   `mkstemp`. ShapeKit does not impose a different report permission policy.
 
    Audit files are not backfilled for cases excluded by
    `--continue_prediction`; rerun without resume filtering to audit previously

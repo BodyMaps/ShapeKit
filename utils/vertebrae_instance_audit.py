@@ -163,15 +163,49 @@ def audit_output_path(
         or "/" in patient_id
         or "\\" in patient_id
         or "\x00" in patient_id
+        or any(not character.isprintable() for character in patient_id)
     ):
         raise ValueError(
-            "patient_id must be one nonempty path component"
+            "patient_id must be one printable nonempty path component"
         )
     return (
         Path(output_root)
         / config.output_dir_name
         / f"{patient_id}{_REPORT_SUFFIX}"
     )
+
+
+def _prepare_audit_output_path(
+    output_root: os.PathLike,
+    config: VertebraeInstanceAuditConfig,
+    patient_id: str,
+) -> Tuple[Path, Path]:
+    """Create and validate a real audit directory below output_root."""
+
+    lexical_path = audit_output_path(output_root, config, patient_id)
+    resolved_output_root = Path(output_root).resolve(strict=False)
+    audit_directory = (
+        resolved_output_root / config.output_dir_name
+    )
+    if audit_directory.is_symlink():
+        raise ValueError("audit output directory must not be a symlink")
+
+    audit_directory.mkdir(parents=True, exist_ok=True)
+    if audit_directory.is_symlink():
+        raise ValueError("audit output directory must not be a symlink")
+
+    resolved_audit_directory = audit_directory.resolve(strict=True)
+    try:
+        resolved_audit_directory.relative_to(resolved_output_root)
+    except ValueError as error:
+        raise ValueError(
+            "audit output directory escapes the resolved output root"
+        ) from error
+
+    report_path = (
+        resolved_audit_directory / lexical_path.name
+    )
+    return report_path, resolved_output_root
 
 
 def _load_analyzer():
@@ -254,12 +288,28 @@ def _canonical_json_bytes(report: Mapping[str, object]) -> bytes:
     ).encode("utf-8")
 
 
-def _atomic_write(path: Path, payload: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _atomic_write(
+    path: Path,
+    payload: bytes,
+    *,
+    resolved_output_root: Path,
+) -> None:
+    if path.parent.is_symlink():
+        raise ValueError("audit output directory must not be a symlink")
+    resolved_parent = path.parent.resolve(strict=True)
+    try:
+        resolved_parent.relative_to(resolved_output_root)
+    except ValueError as error:
+        raise ValueError(
+            "audit output directory escapes the resolved output root"
+        ) from error
+    if resolved_parent != path.parent:
+        raise ValueError("audit output directory must not be a symlink")
+
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.stem}.",
         suffix=".tmp",
-        dir=str(path.parent),
+        dir=str(resolved_parent),
     )
     temporary_path = Path(temporary_name)
     try:
@@ -273,20 +323,6 @@ def _atomic_write(path: Path, payload: bytes) -> None:
             temporary_path.unlink()
         except FileNotFoundError:
             pass
-
-
-def _remove_stale_report(path: Path, logger, patient_id: str) -> None:
-    try:
-        path.unlink()
-    except FileNotFoundError:
-        pass
-    except Exception:
-        logger.exception(
-            "[ShapeKit][vertebrae-instance-analysis] "
-            "Failed to remove stale audit output for %s at %s.",
-            patient_id,
-            path,
-        )
 
 
 def run_vertebrae_instance_audit(
@@ -304,8 +340,20 @@ def run_vertebrae_instance_audit(
     if not config.enabled:
         return "disabled"
 
+    requested_ct_mode = (
+        "reference-as-ct"
+        if config.use_reference_as_ct
+        else "geometry-only"
+    )
+    effective_ct_mode = "not-evaluated"
+    report_path = None
     try:
         report_path = audit_output_path(
+            output_root,
+            config,
+            patient_id,
+        )
+        report_path, resolved_output_root = _prepare_audit_output_path(
             output_root,
             config,
             patient_id,
@@ -313,13 +361,16 @@ def run_vertebrae_instance_audit(
     except Exception:
         logger.exception(
             "[ShapeKit][vertebrae-instance-analysis] "
-            "Invalid audit output path for %s; segmentation "
+            "Invalid audit output path for patient=%s, report=%s, "
+            "requested_ct_mode=%s, effective_ct_mode=%s; segmentation "
             "postprocessing will continue unchanged.",
             patient_id,
+            report_path,
+            requested_ct_mode,
+            effective_ct_mode,
         )
         return "failed"
 
-    _remove_stale_report(report_path, logger, patient_id)
     try:
         ct_array = None
         if config.use_reference_as_ct:
@@ -330,6 +381,11 @@ def run_vertebrae_instance_audit(
                 logger=logger,
                 patient_id=patient_id,
             )
+        effective_ct_mode = (
+            "CT-supported"
+            if ct_array is not None
+            else "geometry-only"
+        )
         analyze_vertebral_instances = _load_analyzer()
         report = analyze_vertebral_instances(
             segmentation_dict,
@@ -338,22 +394,29 @@ def run_vertebrae_instance_audit(
             ct=ct_array,
         )
         payload = _canonical_json_bytes(report)
-        _atomic_write(report_path, payload)
+        _atomic_write(
+            report_path,
+            payload,
+            resolved_output_root=resolved_output_root,
+        )
         logger.info(
             "[ShapeKit][vertebrae-instance-analysis] "
             "Wrote %s audit for %s to %s.",
-            "CT-supported" if ct_array is not None else "geometry-only",
+            effective_ct_mode,
             patient_id,
             report_path,
         )
         return "written"
     except Exception:
-        _remove_stale_report(report_path, logger, patient_id)
         logger.exception(
             "[ShapeKit][vertebrae-instance-analysis] "
-            "Audit failed for %s; segmentation postprocessing will "
-            "continue unchanged.",
+            "Audit failed for patient=%s, report=%s, "
+            "requested_ct_mode=%s, effective_ct_mode=%s; segmentation "
+            "postprocessing will continue unchanged.",
             patient_id,
+            report_path,
+            requested_ct_mode,
+            effective_ct_mode,
         )
         return "failed"
 

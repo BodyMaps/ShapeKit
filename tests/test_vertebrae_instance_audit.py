@@ -7,7 +7,11 @@ import hashlib
 import json
 import logging
 import multiprocessing
+import os
+import subprocess
+import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -78,29 +82,164 @@ def _file_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _save_legacy_fixture(
-    masks: dict,
-    class_map: dict,
-    reference: nib.Nifti1Image,
-    output_folder: Path,
-) -> None:
-    segmentation_folder = output_folder / "segmentations"
-    segmentation_folder.mkdir(parents=True)
-    combined = np.zeros(reference.shape, dtype=np.uint8)
-    for label_id, anatomical_name in sorted(class_map.items()):
-        mask = masks.get(anatomical_name)
-        if mask is None or not np.any(mask):
-            continue
-        binary = mask.astype(np.uint8, copy=False)
-        nib.save(
-            nib.Nifti1Image(binary, reference.affine),
-            segmentation_folder / f"{anatomical_name}.nii.gz",
-        )
-        combined[binary > 0] = label_id
-    nib.save(
-        nib.Nifti1Image(combined, reference.affine),
-        output_folder / "combined_labels.nii.gz",
+_ACTUAL_MAIN_SCRIPT = r"""
+import json
+import os
+import sys
+import types
+
+# scikit-image is optional in the review environment.  These import-only
+# stubs fail loudly if ShapeKit executes any stubbed operation.  target_organs
+# is empty in this integration fixture, so no such operation is expected.
+skimage = types.ModuleType("skimage")
+morphology = types.ModuleType("skimage.morphology")
+measure = types.ModuleType("skimage.measure")
+
+def _unexpected_stub_call(*args, **kwargs):
+    raise AssertionError("an import-only scikit-image stub was executed")
+
+morphology.disk = _unexpected_stub_call
+morphology.convex_hull_image = _unexpected_stub_call
+measure.label = _unexpected_stub_call
+measure.regionprops = _unexpected_stub_call
+skimage.morphology = morphology
+skimage.measure = measure
+sys.modules["skimage"] = skimage
+sys.modules["skimage.morphology"] = morphology
+sys.modules["skimage.measure"] = measure
+
+sys.path.insert(0, os.environ["SHAPEKIT_REPOSITORY"])
+sys.argv = [
+    "main.py",
+    "--log_folder",
+    os.environ["SHAPEKIT_LOG_FOLDER"],
+]
+
+import main
+
+analyzer_before = "utils.vertebrae_instance_analysis" in sys.modules
+if os.environ["SHAPEKIT_AUDIT_MODE"] == "failure":
+    import utils.vertebrae_instance_audit as audit_adapter
+
+    def _synthetic_analyzer_failure():
+        raise RuntimeError("synthetic actual-main analyzer failure")
+
+    audit_adapter._load_analyzer = _synthetic_analyzer_failure
+
+main.main(
+    os.environ["SHAPEKIT_CASE_PATH"],
+    "case_001",
+    os.environ["SHAPEKIT_OUTPUT_ROOT"],
+)
+analyzer_after = "utils.vertebrae_instance_analysis" in sys.modules
+print(
+    "__SHAPEKIT_TEST_RESULT__"
+    + json.dumps(
+        {
+            "analyzer_before": analyzer_before,
+            "analyzer_after": analyzer_after,
+        },
+        sort_keys=True,
     )
+)
+"""
+
+
+def _create_actual_main_case(root: Path) -> Path:
+    segmentation_folder = root / "input" / "case_001" / "segmentations"
+    segmentation_folder.mkdir(parents=True)
+    shape = (40, 40, 80)
+    affine = np.diag([1.0, 1.0, 1.5, 1.0])
+    reference = np.zeros(shape, dtype=np.float32)
+    reference[1:3, 1:3, 1:3] = 300.0
+    vertebra = _ellipsoid(shape=shape, center=(20.0, 20.0, 40.0))
+    nib.save(
+        nib.Nifti1Image(reference, affine),
+        segmentation_folder / "liver.nii.gz",
+    )
+    nib.save(
+        nib.Nifti1Image(vertebra.astype(np.uint8), affine),
+        segmentation_folder / "vertebrae_L1.nii.gz",
+    )
+    return segmentation_folder.parent
+
+
+def _run_actual_main(
+    *,
+    repository: Path,
+    root: Path,
+    case_path: Path,
+    mode: str,
+) -> dict:
+    raw_config = yaml.safe_load(
+        (repository / "config.yaml").read_text(encoding="utf-8")
+    )
+    raw_config["target_organs"] = []
+    if mode == "absent":
+        raw_config.pop("vertebrae_instance_analysis", None)
+    else:
+        raw_config["vertebrae_instance_analysis"] = {
+            "enabled": mode != "disabled",
+            "output_dir_name": "vertebrae_analysis",
+            "use_reference_as_ct": mode == "ct",
+        }
+
+    run_folder = root / f"run_{mode}"
+    output_root = root / f"output_{mode}"
+    log_folder = root / f"logs_{mode}"
+    cache_folder = root / f"cache_{mode}"
+    run_folder.mkdir()
+    output_root.mkdir()
+    (run_folder / "config.yaml").write_text(
+        yaml.safe_dump(raw_config, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONPYCACHEPREFIX": str(cache_folder),
+            "SHAPEKIT_REPOSITORY": str(repository),
+            "SHAPEKIT_LOG_FOLDER": str(log_folder),
+            "SHAPEKIT_AUDIT_MODE": mode,
+            "SHAPEKIT_CASE_PATH": str(case_path),
+            "SHAPEKIT_OUTPUT_ROOT": str(output_root),
+        }
+    )
+    completed = subprocess.run(
+        [sys.executable, "-B", "-c", _ACTUAL_MAIN_SCRIPT],
+        cwd=run_folder,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        raise AssertionError(
+            f"actual main.main() failed for {mode}:\n"
+            f"stdout:\n{completed.stdout}\n"
+            f"stderr:\n{completed.stderr}"
+        )
+    marker = "__SHAPEKIT_TEST_RESULT__"
+    result_line = next(
+        line for line in completed.stdout.splitlines()
+        if line.startswith(marker)
+    )
+    nifti_hashes = {
+        str(path.relative_to(output_root)): _file_digest(path)
+        for path in sorted(output_root.rglob("*.nii.gz"))
+    }
+    audit_path = (
+        output_root / "vertebrae_analysis" / "case_001.json"
+    )
+    return {
+        "output_root": output_root,
+        "nifti_hashes": nifti_hashes,
+        "audit_path": audit_path,
+        "process_result": json.loads(result_line[len(marker):]),
+        "log_folder": log_folder,
+    }
 
 
 def _spawn_audit_worker(payload) -> str:
@@ -296,7 +435,7 @@ class VertebraeInstanceAuditTests(unittest.TestCase):
                     self.assertEqual(captured, [None])
                     logger.warning.assert_called()
 
-    def test_failure_removes_stale_output_and_preserves_handoff(
+    def test_failure_preserves_existing_report_and_handoff(
         self,
     ) -> None:
         masks = _masks()
@@ -308,7 +447,8 @@ class VertebraeInstanceAuditTests(unittest.TestCase):
             config = VertebraeInstanceAuditConfig(enabled=True)
             path = audit_output_path(temporary, config, "case_001")
             path.parent.mkdir(parents=True)
-            path.write_text("stale", encoding="utf-8")
+            existing_payload = b'{"previous_success":true}\n'
+            path.write_bytes(existing_payload)
             logger = mock.Mock()
             with mock.patch(
                 "utils.vertebrae_instance_audit._load_analyzer",
@@ -324,51 +464,9 @@ class VertebraeInstanceAuditTests(unittest.TestCase):
                     logger=logger,
                 )
             self.assertEqual(status, "failed")
-            self.assertFalse(path.exists())
+            self.assertEqual(path.read_bytes(), existing_payload)
+            self.assertEqual(list(path.parent.glob("*.tmp")), [])
             logger.exception.assert_called()
-
-            reference = nib.Nifti1Image(
-                np.zeros(
-                    next(iter(masks.values())).shape,
-                    dtype=np.uint8,
-                ),
-                np.eye(4),
-            )
-            class_map = {
-                index: name
-                for index, name in enumerate(masks, start=1)
-            }
-            baseline_output = Path(temporary) / "baseline_output"
-            failure_output = Path(temporary) / "failure_output"
-            for output_folder in (
-                baseline_output,
-                failure_output,
-            ):
-                _save_legacy_fixture(
-                    masks={
-                        name: mask.copy()
-                        for name, mask in masks.items()
-                    },
-                    class_map=class_map,
-                    reference=reference,
-                    output_folder=output_folder,
-                )
-            baseline_files = sorted(
-                path.relative_to(baseline_output)
-                for path in baseline_output.rglob("*")
-                if path.is_file()
-            )
-            failure_files = sorted(
-                path.relative_to(failure_output)
-                for path in failure_output.rglob("*")
-                if path.is_file()
-            )
-            self.assertEqual(baseline_files, failure_files)
-            for relative_path in baseline_files:
-                self.assertEqual(
-                    _file_digest(baseline_output / relative_path),
-                    _file_digest(failure_output / relative_path),
-                )
 
         handoff = {}
 
@@ -389,7 +487,7 @@ class VertebraeInstanceAuditTests(unittest.TestCase):
             },
         )
 
-    def test_write_failure_removes_stale_and_temporary_output(
+    def test_write_failure_preserves_final_and_removes_temporary_output(
         self,
     ) -> None:
         masks = _masks()
@@ -397,7 +495,8 @@ class VertebraeInstanceAuditTests(unittest.TestCase):
             config = VertebraeInstanceAuditConfig(enabled=True)
             path = audit_output_path(temporary, config, "case_001")
             path.parent.mkdir(parents=True)
-            path.write_text("stale", encoding="utf-8")
+            existing_payload = b'{"previous_success":true}\n'
+            path.write_bytes(existing_payload)
             with mock.patch(
                 "utils.vertebrae_instance_audit.os.replace",
                 side_effect=OSError("synthetic write failure"),
@@ -412,8 +511,226 @@ class VertebraeInstanceAuditTests(unittest.TestCase):
                     logger=mock.Mock(),
                 )
             self.assertEqual(status, "failed")
-            self.assertFalse(path.exists())
+            self.assertEqual(path.read_bytes(), existing_payload)
             self.assertEqual(list(path.parent.glob("*.tmp")), [])
+
+    def test_same_patient_concurrent_failure_cannot_delete_success(
+        self,
+    ) -> None:
+        masks = _masks()
+        config = VertebraeInstanceAuditConfig(enabled=True)
+        failure_started = threading.Event()
+        success_finished = threading.Event()
+        statuses = {}
+        logger = mock.Mock()
+
+        def coordinated_analyzer(*args, **kwargs):
+            if threading.current_thread().name == "failing-audit":
+                failure_started.set()
+                if not success_finished.wait(timeout=10):
+                    raise AssertionError("successful worker did not finish")
+                raise RuntimeError("synthetic concurrent failure")
+            if not failure_started.wait(timeout=10):
+                raise AssertionError("failing worker did not start")
+            return {"worker": "successful-audit"}
+
+        with tempfile.TemporaryDirectory() as temporary:
+            output_root = Path(temporary)
+            path = audit_output_path(
+                output_root,
+                config,
+                "case_001",
+            )
+
+            def successful_worker():
+                statuses["success"] = run_vertebrae_instance_audit(
+                    masks,
+                    reference_img=_GeometryOnlyReference(),
+                    ordered_anatomical_names=NAMES,
+                    output_root=output_root,
+                    patient_id="case_001",
+                    config=config,
+                    logger=logger,
+                )
+                success_finished.set()
+
+            def failing_worker():
+                statuses["failure"] = run_vertebrae_instance_audit(
+                    masks,
+                    reference_img=_GeometryOnlyReference(),
+                    ordered_anatomical_names=NAMES,
+                    output_root=output_root,
+                    patient_id="case_001",
+                    config=config,
+                    logger=logger,
+                )
+
+            with mock.patch(
+                "utils.vertebrae_instance_audit._load_analyzer",
+                return_value=coordinated_analyzer,
+            ):
+                failure_thread = threading.Thread(
+                    target=failing_worker,
+                    name="failing-audit",
+                )
+                success_thread = threading.Thread(
+                    target=successful_worker,
+                    name="successful-audit",
+                )
+                failure_thread.start()
+                success_thread.start()
+                failure_thread.join(timeout=15)
+                success_thread.join(timeout=15)
+
+            self.assertFalse(failure_thread.is_alive())
+            self.assertFalse(success_thread.is_alive())
+            self.assertEqual(
+                statuses,
+                {"success": "written", "failure": "failed"},
+            )
+            payload = path.read_bytes()
+            report = json.loads(payload)
+            self.assertEqual(report, {"worker": "successful-audit"})
+            self.assertEqual(
+                payload,
+                b'{"worker":"successful-audit"}\n',
+            )
+            self.assertEqual(list(path.parent.glob("*.tmp")), [])
+
+    def test_later_failure_preserves_same_and_other_patient_reports(
+        self,
+    ) -> None:
+        masks = _masks()
+        config = VertebraeInstanceAuditConfig(enabled=True)
+        with tempfile.TemporaryDirectory() as temporary:
+            output_root = Path(temporary)
+            with mock.patch(
+                "utils.vertebrae_instance_audit._load_analyzer",
+                return_value=lambda *args, **kwargs: {"success": True},
+            ):
+                for patient_id in ("case_001", "case_002"):
+                    self.assertEqual(
+                        run_vertebrae_instance_audit(
+                            masks,
+                            reference_img=_GeometryOnlyReference(),
+                            ordered_anatomical_names=NAMES,
+                            output_root=output_root,
+                            patient_id=patient_id,
+                            config=config,
+                            logger=mock.Mock(),
+                        ),
+                        "written",
+                    )
+            first_path = audit_output_path(
+                output_root,
+                config,
+                "case_001",
+            )
+            second_path = audit_output_path(
+                output_root,
+                config,
+                "case_002",
+            )
+            first_payload = first_path.read_bytes()
+            second_payload = second_path.read_bytes()
+
+            with mock.patch(
+                "utils.vertebrae_instance_audit._load_analyzer",
+                side_effect=RuntimeError("later failure"),
+            ):
+                self.assertEqual(
+                    run_vertebrae_instance_audit(
+                        masks,
+                        reference_img=_GeometryOnlyReference(),
+                        ordered_anatomical_names=NAMES,
+                        output_root=output_root,
+                        patient_id="case_001",
+                        config=config,
+                        logger=mock.Mock(),
+                    ),
+                    "failed",
+                )
+            self.assertEqual(first_path.read_bytes(), first_payload)
+            self.assertEqual(second_path.read_bytes(), second_payload)
+            self.assertEqual(list(first_path.parent.glob("*.tmp")), [])
+
+    def test_symlinked_audit_directories_are_rejected(self) -> None:
+        masks = _masks()
+        before = {
+            name: _array_digest(mask)
+            for name, mask in masks.items()
+        }
+        config = VertebraeInstanceAuditConfig(enabled=True)
+        for destination_kind in ("segmentation", "outside"):
+            with self.subTest(destination_kind=destination_kind):
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    output_root = root / "output"
+                    output_root.mkdir()
+                    if destination_kind == "segmentation":
+                        target = (
+                            output_root
+                            / "case_001"
+                            / "segmentations"
+                        )
+                    else:
+                        target = root / "outside"
+                    target.mkdir(parents=True)
+                    audit_directory = (
+                        output_root / config.output_dir_name
+                    )
+                    try:
+                        audit_directory.symlink_to(
+                            target,
+                            target_is_directory=True,
+                        )
+                    except (NotImplementedError, OSError) as error:
+                        self.skipTest(
+                            f"symbolic links are unavailable: {error}"
+                        )
+
+                    status = run_vertebrae_instance_audit(
+                        masks,
+                        reference_img=_GeometryOnlyReference(),
+                        ordered_anatomical_names=NAMES,
+                        output_root=output_root,
+                        patient_id="case_001",
+                        config=config,
+                        logger=mock.Mock(),
+                    )
+                    self.assertEqual(status, "failed")
+                    self.assertEqual(list(target.glob("*.json")), [])
+                    self.assertEqual(list(target.glob("*.tmp")), [])
+                    self.assertEqual(
+                        before,
+                        {
+                            name: _array_digest(mask)
+                            for name, mask in masks.items()
+                        },
+                    )
+
+    def test_existing_real_audit_directory_is_accepted(self) -> None:
+        masks = _masks()
+        config = VertebraeInstanceAuditConfig(enabled=True)
+        with tempfile.TemporaryDirectory() as temporary:
+            output_root = Path(temporary)
+            audit_directory = (
+                output_root / config.output_dir_name
+            )
+            audit_directory.mkdir()
+            self.assertEqual(
+                run_vertebrae_instance_audit(
+                    masks,
+                    reference_img=_GeometryOnlyReference(),
+                    ordered_anatomical_names=NAMES,
+                    output_root=output_root,
+                    patient_id="case_001",
+                    config=config,
+                    logger=mock.Mock(),
+                ),
+                "written",
+            )
+            self.assertTrue((audit_directory / "case_001.json").is_file())
 
     def test_repeated_runs_write_byte_identical_json(self) -> None:
         masks = _masks()
@@ -517,6 +834,20 @@ class VertebraeInstanceAuditTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     parse_vertebrae_instance_audit_config(raw)
 
+    def test_patient_identifiers_with_control_characters_are_rejected(
+        self,
+    ) -> None:
+        config = VertebraeInstanceAuditConfig(enabled=True)
+        for patient_id in (
+            "case\ninjected",
+            "case\tinjected",
+            "case\x1finjected",
+            "case\u0085injected",
+        ):
+            with self.subTest(patient_id=repr(patient_id)):
+                with self.assertRaises(ValueError):
+                    audit_output_path(".", config, patient_id)
+
     def test_main_calls_audit_before_combination_as_unused_result(
         self,
     ) -> None:
@@ -559,74 +890,109 @@ class VertebraeInstanceAuditTests(unittest.TestCase):
         )
         self.assertIsInstance(audit_statement, ast.Expr)
 
-    def test_disabled_mode_preserves_legacy_output_bytes(self) -> None:
-        shape = (20, 20, 24)
-        masks = {
-            "vertebrae_L1": _ellipsoid(
-                shape=shape,
-                center=(10.0, 10.0, 12.0),
-            ),
-            "liver": np.zeros(shape, dtype=bool),
-        }
-        masks["liver"][3:8, 3:8, 3:8] = True
-        class_map = {1: "liver", 2: "vertebrae_L1"}
-        reference = nib.Nifti1Image(
-            np.zeros(shape, dtype=np.uint8),
-            np.eye(4),
-        )
+    def test_actual_main_modes_preserve_segmentation_output_bytes(
+        self,
+    ) -> None:
+        repository = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            baseline = root / "baseline" / "case_001"
-            disabled = root / "disabled" / "case_001"
-            _save_legacy_fixture(
-                masks={
-                    name: mask.copy()
-                    for name, mask in masks.items()
-                },
-                class_map=class_map,
-                reference=reference,
-                output_folder=baseline,
-            )
-            self.assertEqual(
-                run_vertebrae_instance_audit(
-                    masks,
-                    reference_img=_GeometryOnlyReference(),
-                    ordered_anatomical_names=("vertebrae_L1",),
-                    output_root=root / "disabled",
-                    patient_id="case_001",
-                    config=VertebraeInstanceAuditConfig(enabled=False),
-                    logger=mock.Mock(),
-                ),
-                "disabled",
-            )
-            _save_legacy_fixture(
-                masks={
-                    name: mask.copy()
-                    for name, mask in masks.items()
-                },
-                class_map=class_map,
-                reference=reference,
-                output_folder=disabled,
-            )
-
-            baseline_files = sorted(
-                path.relative_to(baseline)
-                for path in baseline.rglob("*")
-                if path.is_file()
-            )
-            disabled_files = sorted(
-                path.relative_to(disabled)
-                for path in disabled.rglob("*")
-                if path.is_file()
-            )
-            self.assertEqual(baseline_files, disabled_files)
-            for relative_path in baseline_files:
-                self.assertEqual(
-                    _file_digest(baseline / relative_path),
-                    _file_digest(disabled / relative_path),
+            case_path = _create_actual_main_case(root)
+            input_hashes = {
+                str(path.relative_to(case_path)): _file_digest(path)
+                for path in sorted(case_path.rglob("*.nii.gz"))
+            }
+            results = {
+                mode: _run_actual_main(
+                    repository=repository,
+                    root=root,
+                    case_path=case_path,
+                    mode=mode,
                 )
-            self.assertFalse(
-                (root / "disabled" / "vertebrae_analysis").exists()
+                for mode in (
+                    "absent",
+                    "disabled",
+                    "geometry",
+                    "ct",
+                    "failure",
+                )
+            }
+
+            expected_hashes = results["absent"]["nifti_hashes"]
+            self.assertTrue(expected_hashes)
+            for mode, result in results.items():
+                with self.subTest(mode=mode):
+                    self.assertEqual(
+                        result["nifti_hashes"],
+                        expected_hashes,
+                    )
+
+            for mode in ("absent", "disabled"):
+                result = results[mode]
+                self.assertFalse(
+                    (
+                        result["output_root"]
+                        / "vertebrae_analysis"
+                    ).exists()
+                )
+                self.assertFalse(
+                    result["process_result"]["analyzer_before"]
+                )
+                self.assertFalse(
+                    result["process_result"]["analyzer_after"]
+                )
+
+            for mode, expected_ct_evidence in (
+                ("geometry", "unavailable"),
+                ("ct", "used"),
+            ):
+                audit_path = results[mode]["audit_path"]
+                payload = audit_path.read_bytes()
+                report = json.loads(payload)
+                self.assertEqual(
+                    report["ct_evidence"],
+                    expected_ct_evidence,
+                )
+                self.assertEqual(
+                    payload,
+                    (
+                        json.dumps(
+                            report,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                            ensure_ascii=True,
+                            allow_nan=False,
+                        )
+                        + "\n"
+                    ).encode("utf-8"),
+                )
+
+            self.assertFalse(results["failure"]["audit_path"].exists())
+            self.assertEqual(
+                list(
+                    results["failure"]["audit_path"].parent.glob(
+                        "*.tmp"
+                    )
+                ),
+                [],
+            )
+            failure_log = (
+                results["failure"]["log_folder"] / "debug.log"
+            ).read_text(encoding="utf-8")
+            self.assertIn(
+                "synthetic actual-main analyzer failure",
+                failure_log,
+            )
+            self.assertIn("patient=case_001", failure_log)
+            self.assertIn("report=", failure_log)
+            self.assertIn("requested_ct_mode=geometry-only", failure_log)
+            self.assertIn("effective_ct_mode=geometry-only", failure_log)
+
+            self.assertEqual(
+                input_hashes,
+                {
+                    str(path.relative_to(case_path)): _file_digest(path)
+                    for path in sorted(case_path.rglob("*.nii.gz"))
+                },
             )
 
 
