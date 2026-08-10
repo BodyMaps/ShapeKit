@@ -156,3 +156,54 @@ organ_mask =  check_organ_location(segmentation_dict, organ_mask, 'organ_name', 
 </details>
 
 **Applicable to:** `bladder`, `femurs`, `prostate`
+
+## reconstruct_vertebra_instances
+
+Gated cranio-caudal *identity* repair for the vertebral column. When a
+contiguous thoracolumbar run has its physical vertebrae split across names (or a
+name shared across two bodies), per-label cleanup cannot recover the correct
+names. This function rebuilds the physical instances and re-numbers them, but
+only when it can do so confidently - a clean or partial scan is returned
+unchanged.
+
+<details>
+<summary><strong> ❇️ detailed info</strong></summary>
+
+**Signature:**
+
+`reconstruct_vertebra_instances(vol: np.ndarray, min_size: int = 500, affine=None, logger=None, patient_id: str = "")`
+
+**Parameters:**
+- `vol` (`np.ndarray`): 3D label volume using the vertebrae ids from `config.yaml` `class_map` (26=`vertebrae_L5` .. 49=`vertebrae_C1`).
+- `min_size` (`int`): Components below this voxel count are treated as debris and ignored during clustering.
+- `affine`: Optional voxel-to-world affine. ShapeKit supplies the reference image affine so clustering uses world RAS coordinates regardless of voxel orientation or spacing; without it, array axis 2 is used for backwards compatibility.
+- `logger`: Optional logger; the chosen action is recorded per case.
+- `patient_id` (`str`): Case id used for logging.
+
+**How it works:**
+1. Extract per-label connected components (26-connectivity) above `min_size`.
+2. Cluster them into 24 physical instances by world-z, behind a triple gate: z-gap (fraction of the median dominant-label spacing), transverse-centroid distance, and original-label adjacency.
+3. Re-number the instances cranio-caudally (L5 -> C1).
+
+**Gating (never renumber a healthy/partial scan):**
+- `clean_passthrough`: exactly 24 single-component labels in order -> returned unchanged.
+- `confident_global_relabel`: excess components **and** at least one gated merge that resolves to exactly 24 instances -> relabelled.
+- `fallback_conservative`: any other case (too few/many, no confident merge) -> returned unchanged.
+
+**Returns:**
+- `tuple[np.ndarray, str]`: the (possibly repaired) volume and the action taken.
+
+**Example**
+```python
+repaired, action = reconstruct_vertebra_instances(
+    vertebrae_vol, affine=reference_img.affine, logger=logging, patient_id=pid
+)
+```
+
+**Note:** ShapeKit passes in-memory masks and no CT, so this build omits the
+optional CT-derived mid-thoracic re-cut from the original warm-up; it stays
+conservative and reproducible without intensity data.
+
+</details>
+
+**Applicable to:** `vertebrae`
