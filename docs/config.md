@@ -66,3 +66,12 @@
                 ...
                 └── veins.nii.gz
     ```
+7. `vertebrae_engine`: which vertebrae module to run. `shapekit` (default)
+   is the existing mask-based module. `shapekit_pro` is the evidence-gated
+   engine that repairs vertebra labels against the case CT by recoloring
+   inside the prediction envelope (no deletion of predicted bone); it
+   requires the case CT and falls back to `shapekit` when the CT is absent.
+
+8. `ct_file_name` / `ct_root`: how `shapekit_pro` finds the CT. The engine
+   first looks for `<input_case>/<ct_file_name>`; when `ct_root` is set it
+   also tries `<ct_root>/<case_id>/<ct_file_name>`.

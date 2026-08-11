@@ -3,6 +3,7 @@ import multiprocessing
 from multiprocessing import cpu_count
 from utils.organs_postprocessing import *
 from utils.vertebrae_postprocessing import postprocessing_vertebrae
+from utils.vertebrae_pro import postprocessing_vertebrae_pro
 import logging
 import yaml
 import traceback
@@ -32,6 +33,9 @@ organ_list = list(class_map.values())
 reference_file_name =  affine_reference_file_name # affine info
 data_type = np.int16
 save_combined_label_bool = bool(config['if_save_combined_label'])
+vertebrae_engine = config.get('vertebrae_engine', 'shapekit')
+ct_file_name = config.get('ct_file_name', 'ct.nii.gz')
+ct_root = config.get('ct_root', None)
 
 ##############################################################
 
@@ -105,6 +109,7 @@ def combine_segmentation_dict(segmentation_dict: dict, class_map: dict) -> np.nd
 
 
 def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.array, target_organs: set, patient_id: str, logger: logging.Logger,
+    ct_path: str = None,
 ):
     """
     Apply organ-specific post-processing functions to the segmentation dict
@@ -190,11 +195,20 @@ def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.arra
         )
 
     if 'vertebrae' in target_organs:
-        segmentation_dict = postprocessing_vertebrae(
-            patient_id,
-            segmentation_dict,
-            logger=logger,
-        )
+        if vertebrae_engine == 'shapekit_pro':
+            segmentation_dict = postprocessing_vertebrae_pro(
+                patient_id,
+                segmentation_dict,
+                reference_img,
+                ct_path,
+                logger=logger,
+            )
+        else:
+            segmentation_dict = postprocessing_vertebrae(
+                patient_id,
+                segmentation_dict,
+                logger=logger,
+            )
 
     return segmentation_dict
 
@@ -227,6 +241,11 @@ def main(input_path, input_folder_name, output_path=None):
     segmentation = combine_segmentation_dict(segmentation_dict, class_map)
     patient_id = os.path.basename(input_path)
 
+    # locate the case CT for the shapekit_pro vertebrae engine (optional)
+    ct_path = os.path.join(input_path, ct_file_name)
+    if not os.path.exists(ct_path) and ct_root is not None:
+        ct_path = os.path.join(ct_root, input_folder_name, ct_file_name)
+
     postprocessed_segmentation_dict = process_organs(
         segmentation_dict, 
         img,
@@ -234,6 +253,7 @@ def main(input_path, input_folder_name, output_path=None):
         target_organs,
         patient_id = patient_id,
         logger = logging,
+        ct_path = ct_path,
     )
     
     save_folder_path = os.path.join(output_path, input_folder_name)

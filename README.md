@@ -106,6 +106,47 @@ target_organs: (example)
 Before running any commands, please ensure that `config.yaml` is properly configured. But don't worry! **Most of the configurations do not need to be changed at all.**
 </details>
 
+# Evidence-Gated Vertebrae Engine (ShapeKit-Pro)
+
+The default vertebrae module works from the masks alone. ShapeKit can now
+optionally repair vertebrae against the case **CT image** with an
+evidence-gated engine that **recolors label errors inside the prediction
+envelope instead of deleting bone**:
+
+- fragments are re-attached through CT-certified bone corridors, never
+  discarded when they are real bone;
+- level-band mass misassignment (e.g. a collapsed L1 split between
+  neighbors) is re-arbitrated at image-detected disc planes;
+- the posterior arch is rebuilt from pedicle roots, and one-level-down
+  spinous chains on fused spines are repaired by a caudal-flow
+  re-derivation;
+- every risky stage carries its own defect meter and **reverts itself**
+  when it cannot prove improvement, so one parameter set is safe across
+  clean and pathological cases at scale.
+
+Enable it in `config.yaml`:
+
+```yaml
+vertebrae_engine: shapekit_pro   # default: shapekit (existing module)
+ct_file_name: ct.nii.gz          # looked up inside each input case folder
+# ct_root: /path/to/ct/cases     # fallback root when CTs live elsewhere
+```
+
+No new dependencies (numpy, scipy, nibabel, scikit-image and
+connected-components-3d are already required). CPU only; ~2 min for a
+2.5 mm case and ~30 min for a 0.7 mm whole-spine case on 2 cores, with a
+peak of roughly 9 GB on the latter — budget `--cpu_count` accordingly.
+When a case has no reachable CT the engine logs it and falls back to the
+default vertebrae module, so batch runs never stall.
+
+Measured on the AbdomenAtlasDemo cases (identical parameters, per-stage QA
+and verification tooling in the
+[ShapeKit-Pro repository](https://github.com/aj-das-research/jhu-bodymaps-warmup)):
+both cases reach zero structural audit flags (fragmentation, ordering,
+size, emptiness; exactly 24 components), the collapsed L1 is restored from
+23.3 to 62.9 cm3 at detected disc planes, and every spinous process is
+re-attached to its own vertebra on the fused case.
+
 # Key Functions
 In addition to these general utilities, anatomical-structures-specific correction functions are available in [organs_postprocessing.py](organs_postprocessing.py).
 
