@@ -3,6 +3,7 @@ import multiprocessing
 from multiprocessing import cpu_count
 from utils.organs_postprocessing import *
 from utils.vertebrae_postprocessing import postprocessing_vertebrae
+from utils.vertebrae_iterative import postprocessing_vertebrae as postprocessing_vertebrae_iterative
 from utils.vertebrae_pro import postprocessing_vertebrae_pro
 import logging
 import yaml
@@ -201,6 +202,12 @@ def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.arra
                 segmentation_dict,
                 reference_img,
                 ct_path,
+                logger=logger,
+            )
+        elif vertebrae_engine == 'shapekit_iterative':
+            segmentation_dict = postprocessing_vertebrae_iterative(
+                patient_id,
+                segmentation_dict,
                 logger=logger,
             )
         else:

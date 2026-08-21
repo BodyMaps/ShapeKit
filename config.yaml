@@ -92,8 +92,9 @@ affine_reference_file_name: liver.nii.gz
 if_save_combined_label: True
 
 # vertebrae engine:
-#   shapekit      - default mask-based module (no CT needed)
-#   shapekit_pro  - evidence-gated repair against the case CT: recolors
+#   shapekit             - default mask-based module (no CT needed)
+#   shapekit_iterative   - VerSe-inspired iterative refinement loop (no CT needed)
+#   shapekit_pro          - evidence-gated repair against the case CT: recolors
 #                   label errors inside the prediction envelope instead of
 #                   deleting bone; every risky stage self-reverts unless it
 #                   can prove improvement. Needs the case CT (see below);
