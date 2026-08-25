@@ -90,3 +90,17 @@ organ_adjacency_map:
 affine_reference_file_name: liver.nii.gz
 
 if_save_combined_label: True
+
+# vertebrae engine:
+#   shapekit      - default mask-based module (no CT needed)
+#   shapekit_pro  - evidence-gated repair against the case CT: recolors
+#                   label errors inside the prediction envelope instead of
+#                   deleting bone; every risky stage self-reverts unless it
+#                   can prove improvement. Needs the case CT (see below);
+#                   falls back to the default module when the CT is absent.
+vertebrae_engine: shapekit
+
+# CT lookup for shapekit_pro: first <input_case>/<ct_file_name>, then
+# <ct_root>/<case_id>/<ct_file_name> when ct_root is set.
+ct_file_name: ct.nii.gz
+# ct_root: /path/to/original/ct/cases

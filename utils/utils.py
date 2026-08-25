@@ -546,7 +546,7 @@ def organ_HU_value(mask):
     
 
 def read_all_segmentations(folder_path, organ_list, subfolder_name='segmentations',
-                           data_type=np.uint8, target_axcodes=('R', 'A', 'S')) -> dict:
+                           data_type=np.uint8, target_axcodes=None) -> dict:
     """
     Safely read segmentation masks from .nii.gz files, correct orientation,
     and handle corrupt or missing files gracefully.
@@ -575,7 +575,11 @@ def read_all_segmentations(folder_path, organ_list, subfolder_name='segmentation
         raise RuntimeError("[ERROR] No readable .nii.gz files found to determine orientation.")
 
     orig_ornt = io_orientation(ref_img.affine)
-    target_ornt = axcodes2ornt(target_axcodes)
+    if target_axcodes is None:
+        target_ornt = orig_ornt
+    else:
+        target_ornt = axcodes2ornt(target_axcodes)
+
     transform = ornt_transform(orig_ornt, target_ornt)
 
     # Now load all valid segmentations
@@ -637,7 +641,7 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
 
         mask = mask.astype(np.uint8, copy=False)
         nib.save(
-            nib.Nifti1Image(mask, reference_img.affine, reference_img.header),
+            nib.Nifti1Image(mask, reference_img.affine),
             os.path.join(seg_folder, f"{organ}.nii.gz")
         )
         del mask  # free memory
@@ -666,6 +670,6 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
 
         # Save combined label map
         nib.save(
-            nib.Nifti1Image(combined, reference_img.affine, reference_img.header),
+            nib.Nifti1Image(combined, reference_img.affine),
             os.path.join(output_folder, combined_filename)
         )
