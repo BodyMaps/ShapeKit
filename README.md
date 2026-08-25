@@ -145,6 +145,43 @@ size, emptiness; exactly 24 components), the collapsed L1 is restored from
 23.3 to 62.9 cm3 at detected disc planes, and every spinous process is
 re-attached to its own vertebra on the fused case.
 
+# Iterative Vertebrae Engine (ShapeKit-Iterative)
+
+In addition to the default and Pro vertebrae engines, ShapeKit now offers a
+**VerSe-inspired iterative refinement** module that runs an anatomic
+consistency cycle on the predicted vertebrae masks alone (no CT required):
+
+- **residual reassignment** — recovers unassigned spine voxels and
+  reassigns them to the nearest vertebra by 3D centroid distance;
+- **gap detection & filling** — detects anomalously large Z-axis gaps
+  between consecutive vertebrae and assigns residual components to the
+  missing level;
+- **fishing for boundary vertebrae** — extrapolates beyond the detected
+  inferior/superior boundaries to recover L5 or C1 when missing;
+- **duplicate removal** — merges overlapping detections via IoU thresholding;
+- **anatomical size consistency** — validates vertebrae sizes against
+  region-group medians (lumbar > thoracic > cervical) and removes outliers;
+- **iterative convergence** — repeats the full clean → reassign → fill →
+  reallocate loop until the change rate drops below 1% or max iterations
+  (3) are reached.
+
+This module is adapted from Meng et al., "Vertebrae localization,
+segmentation and identification using a graph optimization and an
+anatomic consistency cycle" (2022,
+[https://gitlab.inria.fr/spine/vertebrae_segmentation](https://gitlab.inria.fr/spine/vertebrae_segmentation)).
+
+Enable it in `config.yaml`:
+
+```yaml
+vertebrae_engine: shapekit_iterative   # default: shapekit (existing module)
+```
+
+No CT image is needed — the module works from prediction masks alone.
+Output is compatible with the existing 26-based label scheme
+(26 = L5 … 49 = C1). Verified to produce identical results to the
+SuPreM standalone postprocessing pipeline on the AbdomenAtlasDemo
+benchmark cases.
+
 # Key Functions
 In addition to these general utilities, anatomical-structures-specific correction functions are available in [organs_postprocessing.py](organs_postprocessing.py).
 
