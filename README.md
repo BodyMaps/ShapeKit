@@ -40,9 +40,7 @@ To set up environment, see [INSTALL.md](https://github.com/BodyMaps/ShapeKit/blo
 ```bash
 git clone https://github.com/BodyMaps/ShapeKit.git
 cd ShapeKit
-while read requirement; do
-    pip install "$requirement" || echo "Failed to install $requirement, skipping..."
-done < requirements.txt
+pip install -r requirements.txt
 ```
 
 # Use ShapeKit
