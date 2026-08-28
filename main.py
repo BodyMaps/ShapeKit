@@ -1,9 +1,15 @@
 import argparse
+import sys
 import multiprocessing
 from multiprocessing import cpu_count
 from utils.organs_postprocessing import *
 from utils.vertebrae_postprocessing import postprocessing_vertebrae
 from utils.vertebrae_pro import postprocessing_vertebrae_pro
+from utils.vertebrae_rib_identity import (IDENTITY_RIB_ANCHOR,
+                                          IdentityConfigError,
+                                          postprocessing_vertebrae_rib_identity,
+                                          resolve_rib_path,
+                                          validate_identity_config)
 import logging
 import yaml
 import traceback
@@ -36,6 +42,10 @@ save_combined_label_bool = bool(config['if_save_combined_label'])
 vertebrae_engine = config.get('vertebrae_engine', 'shapekit')
 ct_file_name = config.get('ct_file_name', 'ct.nii.gz')
 ct_root = config.get('ct_root', None)
+vertebrae_identity = config.get('vertebrae_identity', 'none')
+rib_file_name = config.get('rib_file_name', 'total.nii.gz')
+rib_root = config.get('rib_root', None)
+rib_qa_dir = config.get('rib_qa_dir', None)
 
 ##############################################################
 
@@ -110,6 +120,7 @@ def combine_segmentation_dict(segmentation_dict: dict, class_map: dict) -> np.nd
 
 def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.array, target_organs: set, patient_id: str, logger: logging.Logger,
     ct_path: str = None,
+    rib_path: str = None,
 ):
     """
     Apply organ-specific post-processing functions to the segmentation dict
@@ -195,6 +206,18 @@ def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.arra
         )
 
     if 'vertebrae' in target_organs:
+        # optional identity adjudication, ahead of the shape-cleanup engine
+        if vertebrae_identity == IDENTITY_RIB_ANCHOR:
+            segmentation_dict, _ = postprocessing_vertebrae_rib_identity(
+                patient_id,
+                segmentation_dict,
+                reference_img,
+                ct_path,
+                rib_path,
+                logger=logger,
+                qa_dir=rib_qa_dir,
+            )
+
         if vertebrae_engine == 'shapekit_pro':
             segmentation_dict = postprocessing_vertebrae_pro(
                 patient_id,
@@ -246,6 +269,10 @@ def main(input_path, input_folder_name, output_path=None):
     if not os.path.exists(ct_path) and ct_root is not None:
         ct_path = os.path.join(ct_root, input_folder_name, ct_file_name)
 
+    # locate the precomputed rib volume for the optional identity stage
+    rib_path = resolve_rib_path(input_path, input_folder_name,
+                                rib_file_name, rib_root)
+
     postprocessed_segmentation_dict = process_organs(
         segmentation_dict, 
         img,
@@ -254,6 +281,7 @@ def main(input_path, input_folder_name, output_path=None):
         patient_id = patient_id,
         logger = logging,
         ct_path = ct_path,
+        rib_path = rib_path,
     )
     
     save_folder_path = os.path.join(output_path, input_folder_name)
@@ -351,6 +379,13 @@ post_logger.addHandler(post_handler)
 
 
 if __name__ == '__main__':
+
+    # validate the vertebrae configuration before any case is processed
+    try:
+        validate_identity_config(vertebrae_identity, vertebrae_engine)
+    except IdentityConfigError as config_error:
+        print(f"[ERROR] {config_error}")
+        sys.exit(2)
 
     input_folder = args.input_folder
     output_folder= args.output_folder

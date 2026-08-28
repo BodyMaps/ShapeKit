@@ -104,3 +104,29 @@ vertebrae_engine: shapekit
 # <ct_root>/<case_id>/<ct_file_name> when ct_root is set.
 ct_file_name: ct.nii.gz
 # ct_root: /path/to/original/ct/cases
+
+# optional vertebral identity stage, applied BEFORE vertebrae_engine:
+#   none        - disabled (default; behaviour is unchanged)
+#   rib_anchor  - adjudicate which level is which from costovertebral rib
+#                 attachment geometry, then hand the masks to vertebrae_engine
+#                 for the usual shape cleanup. It reads an external anatomical
+#                 cue - the ribs - rather than inferring level identity from
+#                 the vertebral predictions alone. Requires the case CT (found
+#                 via ct_file_name / ct_root above) and a precomputed
+#                 TotalSegmentator 'total' volume; only the rib masks in that
+#                 volume are read. When either input is missing or sits on a
+#                 different voxel grid, the stage logs the reason and leaves
+#                 the masks untouched.
+#                 Requires vertebrae_engine: shapekit_pro. Pairing it with
+#                 the default engine is rejected at startup, because that
+#                 engine may reassign contiguous cranio-caudal identities
+#                 and undo the correction.
+vertebrae_identity: none
+
+# rib volume lookup for rib_anchor: first <input_case>/<rib_file_name>, then
+# <rib_root>/<case_id>/<rib_file_name>, then <rib_root>/<case_id>.nii.gz.
+rib_file_name: total.nii.gz
+# rib_root: /path/to/totalsegmentator/cases
+
+# optional directory for one small JSON QA record per case
+# rib_qa_dir: /path/to/qa
