@@ -1,10 +1,13 @@
 import numpy as np
 import nibabel as nib
 import pyvista as pv
-import numpy as np
 import os
 import matplotlib.colors as mcolors
-from utils import fill_holes
+
+try:
+    from .utils import fill_holes
+except ImportError:  # Support direct execution: python utils/visualization_tool.py
+    from utils import fill_holes
 
 
 
@@ -49,20 +52,20 @@ def get_labeled_group_mask(group_name, group_dict, location):
     
     # Load the first mask to get shape
     first_path = os.path.join(location, 'segmentations/liver.nii.gz')
-    shape = nib.load(first_path).get_fdata().shape
+    shape = nib.load(first_path).shape
     labeled_mask = np.zeros(shape, dtype=np.uint8)
 
     for idx, organ in enumerate(organ_list, start=1):
-        try:
-            organ_path = os.path.join(location, 'segmentations', f'{organ}.nii.gz')
-            nii_img = nib.load(organ_path)
-            binary_mask = nii_img.get_fdata() > 0
-            binary_mask = fill_holes(binary_mask) # fill holes
-            labeled_mask[binary_mask] = np.maximum(labeled_mask[binary_mask], idx)
-
-            print(f"Loaded {organ}, \tassigned idx: {idx}, \tvolumn: {np.sum(binary_mask)}")
-        except:
+        organ_path = os.path.join(location, 'segmentations', f'{organ}.nii.gz')
+        if not os.path.exists(organ_path):
             print(f"Organ {organ} does not exist, pass ...")
+            continue
+        nii_img = nib.load(organ_path)
+        binary_mask = np.asanyarray(nii_img.dataobj) > 0
+        binary_mask = fill_holes(binary_mask) # fill holes
+        labeled_mask[binary_mask] = np.maximum(labeled_mask[binary_mask], idx)
+
+        print(f"Loaded {organ}, \tassigned idx: {idx}, \tvolumn: {np.sum(binary_mask)}")
 
     return labeled_mask
 

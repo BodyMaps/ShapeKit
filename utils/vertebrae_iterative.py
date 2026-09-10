@@ -502,7 +502,7 @@ def iterative_refinement(segmentation, max_iter=3, voxel_supression_threshold=10
     prev_seg = None
 
     for iteration in range(max_iter):
-        print(f"  ─ Iteration {iteration+1}/{max_iter} ─")
+        print(f"-- Iteration {iteration + 1}/{max_iter} --")
 
         # Save binary spine mask before processing (union of all labels)
         binary_spine = (segmentation > 0).astype(np.uint8)

@@ -64,13 +64,22 @@ INPUT or OUTPUT
 ```bash
 export INPUT="/path/to/your/input/folder"
 export OUTPUT="/path/to/your/output/folder"
-export CPU_NUM=16
+export CPU_NUM=4
 export LOG="logs/folder_named_after_your_task"
 
 python -W ignore main.py --input_folder $INPUT --output_folder $OUTPUT --cpu_count $CPU_NUM --log_folder $LOG --continue_prediction
 ```
 
-The processing process will be recorded as `debug.log` and `postprocessing.log`,and are stored under the directory `LOG`.
+ShapeKit stages each case separately and only replaces an existing result after
+the new output is complete. A `.shapekit_complete` marker identifies cases that
+can safely be skipped by `--continue_prediction`. Worker count defaults to four
+and is also capped by available memory; use `--memory_per_worker_gb` to adjust
+the estimate for unusually large or small scans.
+
+Processing is recorded in `debug.log` and `postprocessing.log` under `LOG`. The
+command exits with a nonzero status if any case fails. Resume candidates are
+recorded as `continue.csv` under the output folder rather than in the source
+checkout.
 
 # Plug-and-Play Configuration
 Tell ShapeKit which anatomical structures you are interested in by modifying the `config.yaml` file.
@@ -183,9 +192,16 @@ SuPreM standalone postprocessing pipeline on the AbdomenAtlasDemo
 benchmark cases.
 
 # Key Functions
-In addition to these general utilities, anatomical-structures-specific correction functions are available in [organs_postprocessing.py](organs_postprocessing.py).
+In addition to these general utilities, anatomical-structures-specific correction functions are available in [organs_postprocessing.py](utils/organs_postprocessing.py).
 
 Please check the details in [functions guide book 📖.](docs/functions.md)
+
+# Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
 
 # Related Articles
 

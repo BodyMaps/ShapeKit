@@ -10,21 +10,12 @@ from scipy.ndimage import label, binary_fill_holes, binary_dilation, binary_eros
 from skimage.morphology import disk, convex_hull_image
 from skimage.measure import label, regionprops
 from scipy import ndimage
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy.ndimage import gaussian_filter
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.distance import cdist
 from nibabel.orientations import aff2axcodes
 import gc
-from copy import deepcopy
 import yaml
-from nibabel.orientations import (
-    io_orientation,
-    axcodes2ornt,
-    ornt_transform,
-    apply_orientation,
-)
+from nibabel.processing import resample_from_to
 
 
 ####################################################################################
@@ -105,7 +96,7 @@ from nibabel.orientations import (
 
 def compute_center(mask):
     # use in-built center_of_mass to boost execution speed
-    if np.sum(mask) == 0:
+    if mask is None or not np.any(mask):
         return None
     return np.array(center_of_mass(mask))
 
@@ -305,8 +296,13 @@ def split_right_left(mask, AXIS=0):
         left_mask (np.ndarray): Binary mask containing left-side components.
     """
 
+    if mask is None:
+        raise ValueError("mask is required")
+    if not np.any(mask):
+        empty = np.zeros_like(mask, dtype=np.uint8)
+        return empty.copy(), empty
 
-    coords = np.argwhere(mask == 1)
+    coords = np.argwhere(mask > 0)
     x_mid = np.median(coords[:, AXIS])  
     left_mask  = np.zeros_like(mask, dtype=np.uint8)
     right_mask = np.zeros_like(mask, dtype=np.uint8)
@@ -391,6 +387,8 @@ def plot_3d_mask(mask_3d, organ_name='lung'):
         sub_folder: str, subject or case ID
         save_path: str, path to save the output image
     """
+    import matplotlib.pyplot as plt
+
     coords = np.column_stack(np.where(mask_3d > 0))  # shape (N, 3)
 
     
@@ -427,7 +425,8 @@ def balance_protrusion_between_masks(mask_A, mask_B, axis=2, min_cc_voxel=1000):
         new_mask_A, new_mask_B : np.ndarray
             Updated binary masks (mutually exclusive)
     """
-    assert mask_A.shape == mask_B.shape, "Masks must be the same shape"
+    if mask_A.shape != mask_B.shape:
+        raise ValueError("Masks must have the same shape")
 
     # Copy masks to avoid modifying original
     new_mask_A = mask_A.copy()
@@ -487,7 +486,7 @@ def reassign_left_right_based_on_liver(right_mask, left_mask, liver_mask):
     right_center = compute_center(right_mask)
 
     if liver_center is None or left_center is None or right_center is None:
-        return left_mask, right_mask
+        return right_mask, left_mask
 
     # Compute Euclidean distances between liver and left/right masks
     dist_to_left = np.linalg.norm(liver_center - left_center)
@@ -545,8 +544,25 @@ def organ_HU_value(mask):
     return np.mean(mask)
     
 
+def _world_bounds(img):
+    """Return the world-coordinate bounds of a 3D NIfTI image."""
+    corners = np.array(np.meshgrid(
+        *[(0, size - 1) for size in img.shape[:3]], indexing='ij'
+    )).reshape(3, -1).T
+    world = nib.affines.apply_affine(img.affine, corners)
+    return world.min(axis=0), world.max(axis=0)
+
+
+def _grids_overlap(img, reference_img, tolerance=1e-3):
+    img_min, img_max = _world_bounds(img)
+    ref_min, ref_max = _world_bounds(reference_img)
+    overlap = np.minimum(img_max, ref_max) - np.maximum(img_min, ref_min)
+    return bool(np.all(overlap >= -tolerance))
+
+
 def read_all_segmentations(folder_path, organ_list, subfolder_name='segmentations',
-                           data_type=np.uint8, target_axcodes=None) -> dict:
+                           data_type=np.uint8, reference_img=None,
+                           target_axcodes=None) -> dict:
     """
     Safely read segmentation masks from .nii.gz files, correct orientation,
     and handle corrupt or missing files gracefully.
@@ -557,30 +573,16 @@ def read_all_segmentations(folder_path, organ_list, subfolder_name='segmentation
     if not os.path.exists(seg_folder):
         raise FileNotFoundError(f"[ERROR] Folder not found: {seg_folder}")
 
-    files = [f for f in os.listdir(seg_folder) if f.endswith('.nii.gz')]
+    files = sorted(f for f in os.listdir(seg_folder) if f.endswith('.nii.gz'))
     if not files:
         raise ValueError(f"[ERROR] No .nii.gz files found in: {seg_folder}")
 
-    # Find first good file for orientation reference
-    ref_img = None
-    for f in files:
-        try:
-            ref_img = nib.load(os.path.join(seg_folder, f))
-            break
-        except Exception as e:
-            print(f"[WARNING] Failed to load {f} as reference: {e}")
-            continue
-
-    if ref_img is None:
-        raise RuntimeError("[ERROR] No readable .nii.gz files found to determine orientation.")
-
-    orig_ornt = io_orientation(ref_img.affine)
-    if target_axcodes is None:
-        target_ornt = orig_ornt
-    else:
-        target_ornt = axcodes2ornt(target_axcodes)
-
-    transform = ornt_transform(orig_ornt, target_ornt)
+    if reference_img is None:
+        if target_axcodes is not None:
+            raise ValueError("reference_img is required when aligning segmentations")
+        reference_img = nib.load(os.path.join(seg_folder, files[0]))
+    if len(reference_img.shape) != 3:
+        raise ValueError(f"Reference image must be 3D, got shape {reference_img.shape}")
 
     # Now load all valid segmentations
     for file in files:
@@ -591,21 +593,33 @@ def read_all_segmentations(folder_path, organ_list, subfolder_name='segmentation
         file_path = os.path.join(seg_folder, file)
         try:
             nii_img = nib.load(file_path)
-            arr = np.asanyarray(nii_img.dataobj).astype(data_type)
+            if len(nii_img.shape) != 3:
+                raise ValueError(f"expected a 3D mask, got shape {nii_img.shape}")
 
-            # Apply orientation transformation
-            arr = apply_orientation(arr, transform)
-            if arr.ndim != 3:
-                continue
+            same_grid = (
+                nii_img.shape == reference_img.shape
+                and np.allclose(nii_img.affine, reference_img.affine, rtol=1e-5, atol=1e-4)
+            )
+            if not same_grid:
+                if not _grids_overlap(nii_img, reference_img):
+                    raise ValueError("mask does not overlap the reference image in physical space")
+                nii_img = resample_from_to(
+                    nii_img,
+                    (reference_img.shape, reference_img.affine),
+                    order=0,
+                    mode='constant',
+                    cval=0,
+                )
+
+            raw = np.asanyarray(nii_img.dataobj)
+            if not np.isfinite(raw).all():
+                raise ValueError("mask contains non-finite values")
+            arr = (raw > 0).astype(data_type, copy=False)
 
             segmentation_dict[organ] = arr
 
         except Exception as e:
-            print(f"[WARNING] Skipping {organ} due to read/format error: {e}")
-            continue
-
-        del nii_img, arr
-        gc.collect() # free up memory usage
+            raise ValueError(f"Failed to load segmentation '{file_path}': {e}") from e
 
     if not segmentation_dict:
         raise RuntimeError(f"[ERROR] No valid segmentations found in: {seg_folder}")
@@ -633,43 +647,40 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
     seg_folder = os.path.join(output_folder, "segmentations")
     os.makedirs(seg_folder, exist_ok=True)
 
-    # Save each organ mask individually and discard from memory
+    reference_shape = reference_img.shape
+    if len(reference_shape) != 3:
+        raise ValueError(f"Reference image must be 3D, got shape {reference_shape}")
+
+    combined = np.zeros(reference_shape, dtype=np.uint8) if if_save_combined else None
+    saved_count = 0
+
+    # Save each organ mask and construct the combined map without reopening files.
     for idx, organ in sorted(class_map.items()):
-        mask = processed_segmentation_dict.pop(organ, None)
+        mask = processed_segmentation_dict.get(organ)
         if mask is None or not mask.any():
             continue
 
-        mask = mask.astype(np.uint8, copy=False)
+        if mask.shape != reference_shape:
+            raise ValueError(
+                f"Mask '{organ}' has shape {mask.shape}; expected {reference_shape}"
+            )
+        mask = (mask > 0).astype(np.uint8, copy=False)
+        header = reference_img.header.copy()
+        header.set_data_dtype(np.uint8)
+        output_img = nib.Nifti1Image(mask, reference_img.affine, header)
+        nib.save(output_img, os.path.join(seg_folder, f"{organ}.nii.gz"))
+        saved_count += 1
+
+        if combined is not None:
+            combined[mask > 0] = idx
+
+    if saved_count == 0:
+        raise ValueError("No non-empty segmentation masks were produced")
+
+    if combined is not None:
+        header = reference_img.header.copy()
+        header.set_data_dtype(np.uint8)
         nib.save(
-            nib.Nifti1Image(mask, reference_img.affine),
-            os.path.join(seg_folder, f"{organ}.nii.gz")
-        )
-        del mask  # free memory
-
-    # choose to save the combine label
-    if if_save_combined:
-        # Allocate combined volume
-        sample_path = next(
-        os.path.join(seg_folder, f)
-            for f in os.listdir(seg_folder)
-            if f.endswith(".nii.gz")
-        )
-        shape = nib.load(sample_path).shape
-        combined = np.zeros(shape, dtype=np.uint8)
-
-        for idx, organ in sorted(class_map.items()):
-            try:
-                organ_path = os.path.join(seg_folder, f"{organ}.nii.gz")
-                if not os.path.exists(organ_path):
-                    continue
-                mask = nib.load(organ_path).get_fdata().astype(bool)
-                combined[mask] = idx
-                del mask  # free memory
-            except:# if some masks are null and therefore deleted, skip
-                continue
-
-        # Save combined label map
-        nib.save(
-            nib.Nifti1Image(combined, reference_img.affine),
-            os.path.join(output_folder, combined_filename)
+            nib.Nifti1Image(combined, reference_img.affine, header),
+            os.path.join(output_folder, combined_filename),
         )
