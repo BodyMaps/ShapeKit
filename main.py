@@ -5,6 +5,7 @@ from utils.organs_postprocessing import *
 from utils.vertebrae_postprocessing import postprocessing_vertebrae
 from utils.vertebrae_iterative import postprocessing_vertebrae as postprocessing_vertebrae_songlin
 from utils.vertebrae_pro import postprocessing_vertebrae_pro
+from utils.vertebrae_refinement import postprocessing_vertebrae_refinement
 import logging
 import yaml
 import traceback
@@ -196,7 +197,14 @@ def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.arra
         )
 
     if 'vertebrae' in target_organs:
-        if vertebrae_engine == 'shapekit_pro':
+        if vertebrae_engine == 'anatomical_refinement':
+            segmentation_dict = postprocessing_vertebrae_refinement(
+                patient_id,
+                segmentation_dict,
+                reference_img,
+                logger=logger,
+            )
+        elif vertebrae_engine == 'shapekit_pro':
             segmentation_dict = postprocessing_vertebrae_pro(
                 patient_id,
                 segmentation_dict,

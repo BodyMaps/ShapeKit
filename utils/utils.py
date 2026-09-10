@@ -636,7 +636,7 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
     # Save each organ mask individually and discard from memory
     for idx, organ in sorted(class_map.items()):
         mask = processed_segmentation_dict.pop(organ, None)
-        if mask is None or not mask.any():
+        if mask is None:
             continue
 
         mask = mask.astype(np.uint8, copy=False)
