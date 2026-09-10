@@ -23,6 +23,7 @@ wheels/
 *.egg
 
 # Virtual environments
+.venv/
 venv/
 ENV/
 env/
@@ -43,6 +44,7 @@ Thumbs.db
 postprocessing.log
 
 # Temporary files
+.pytest_cache/
 /tmp/
 *.tmp
 .DS_Store

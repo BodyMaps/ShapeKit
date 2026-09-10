@@ -231,7 +231,7 @@ def reallocate_based_on_size(segmentation):
                 # obvious small one, need to merge with nearest neighbor
                 need_to_merge_label.append(label_id)
                 
-        except:
+        except KeyError:
             continue
 
     split_counter = len(need_to_merge_label)
@@ -334,30 +334,26 @@ def spine_adjacent_pairs(img, voxel_supression_threshold=10, default_val=0):
     Check alternating connected component to identfy fractins assigned to the wrong vertebra
     """
     labels = list(all_labels.keys())
-    mod_img = copy.deepcopy(img)
+    mod_img = img.copy()
     
     #Get triplets of adjacent vertebras
     triplets = []
     for l in range(len(labels)):
         # Regular triplet
-        if l > 0 and l < len(labels)-1:
+        if 0 < l < len(labels) - 1:
             triplets.append((labels[l-1], labels[l], labels[l+1]))
-        # First triplet
-        elif l<len(labels)-1:
-            assert l == 0, "Just to be sure" #TODO: Remove before release
+        elif l == 0:
             triplets.append((labels[l], labels[l+1]))
-        # Last triplet
-        elif l>0:
-            assert l==len(labels)-1, "Just to be sure" #TODO: Remove before release
+        else:
             triplets.append((labels[l-1], labels[l]))
     
     for idx, triplet in enumerate(triplets):
         # print(f"[INFO] Processing triplet no. {idx}/{len(triplets)}")
         #Seperately handel first and last triplet
-        if idx==0 or idx==len(triplets)-1:
+        if idx == 0:
             current, below = triplet
             above = None
-        elif idx == len(triplets)-1:
+        elif idx == len(triplets) - 1:
             above, current = triplet
             below = None
         #Standard triplet
@@ -409,7 +405,7 @@ def supress_non_largest_components(img, default_val = 0):
     """supress all non largest components"""
     
     index_arr = get_index_arr(img)
-    img_mod = copy.deepcopy(img)
+    img_mod = img.copy()
     new_background = np.zeros(img.shape, dtype=np.bool_)
     for name, _ in all_labels.items():
 
@@ -420,8 +416,9 @@ def supress_non_largest_components(img, default_val = 0):
             if len(dominant_vals)>=2: #Case: no predictions
                 new_background = np.logical_or(new_background, np.logical_not(np.logical_or(label_cc==dominant_vals[0], label_cc==dominant_vals[1])))
 
-    for voxel in index_arr[new_background]:
-        img_mod[tuple(voxel)] = default_val
+    coords = index_arr[new_background]
+    if coords.size:
+        img_mod[tuple(coords.T)] = default_val
 
     return img_mod
 

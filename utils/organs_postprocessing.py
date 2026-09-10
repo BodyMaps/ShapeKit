@@ -1,7 +1,8 @@
 from utils.utils import *
 import logging
+from pathlib import Path
 
-with open('config.yaml', 'r') as f:
+with (Path(__file__).resolve().parents[1] / 'config.yaml').open('r') as f:
     config = yaml.safe_load(f)
 
 class_map = config['class_map']
@@ -25,6 +26,8 @@ def post_processing_liver(segmentation_dict):
         * disconnected parts
     """
     liver_mask = segmentation_dict.get('liver')
+    if liver_mask is None or not np.any(liver_mask):
+        return segmentation_dict
     
     # keep only the main components
     cleaned_liver_mask = suppress_non_largest_components_binary(liver_mask, keep_top=3)
@@ -48,7 +51,10 @@ def post_processing_pancreas(segmentation_dict, dice_threshold=0.05):
     """
 
     pancreas_mask = segmentation_dict.get('pancreas')
-    try:    # is pancreas sub-parts exist, check with 
+    if pancreas_mask is None or not np.any(pancreas_mask):
+        return segmentation_dict
+
+    try:    # if pancreas sub-parts exist, compare with them
 
         head_mask     = segmentation_dict['pancreas_head']
         body_mask     = segmentation_dict['pancreas_body']
@@ -66,8 +72,7 @@ def post_processing_pancreas(segmentation_dict, dice_threshold=0.05):
             # replace with combined one
             new_pancreas_mask = combined_parts_mask
 
-    except:
-        
+    except KeyError:
         new_pancreas_mask = suppress_non_largest_components_binary(pancreas_mask)
 
     
@@ -94,14 +99,10 @@ def post_processing_colon_intestine(segmentation_dict, patient_id:str, logger:lo
         cleaned_colon_mask = remove_small_components(colon_mask, threshold=colon_threshold)
         segmentation_dict['colon'] = cleaned_colon_mask
     
-    try:
-        # Compute threshold once for intestine
-        if intestine_mask is not None and np.any(intestine_mask):
-            intestine_threshold = max(1, np.sum(intestine_mask) / 10)
-            cleaned_intestine_mask = remove_small_components(intestine_mask, threshold=intestine_threshold)
-            segmentation_dict['intestine'] = cleaned_intestine_mask
-    except:
-        logger.info(f"[INFO] {patient_id}, (Colon-Intestine Check Module) Intestine does not exist, skipped ...")
+    if intestine_mask is not None and np.any(intestine_mask):
+        intestine_threshold = max(1, np.sum(intestine_mask) / 10)
+        cleaned_intestine_mask = remove_small_components(intestine_mask, threshold=intestine_threshold)
+        segmentation_dict['intestine'] = cleaned_intestine_mask
     return segmentation_dict
 
 
@@ -114,8 +115,9 @@ def post_processing_stomach(segmentation_dict):
 
         
     """
-    stomach_mask = segmentation_dict['stomach'].copy()
+    stomach_mask = segmentation_dict.get('stomach')
     if stomach_mask is not None and np.any(stomach_mask):
+        stomach_mask = stomach_mask.copy()
         stomach_threshold = max(1, np.sum(stomach_mask) / 10)
         cleaned_stomach_mask = remove_small_components(stomach_mask, threshold=stomach_threshold)
         segmentation_dict['stomach'] = cleaned_stomach_mask
@@ -142,7 +144,10 @@ def post_processing_spleen(segmentation_dict):
         * artifacts
         * disconnected
     """
-    spleen_mask = segmentation_dict['spleen'].copy()
+    spleen_mask = segmentation_dict.get('spleen')
+    if spleen_mask is None or not np.any(spleen_mask):
+        return segmentation_dict
+    spleen_mask = spleen_mask.copy()
 
     cleaned_spleen_mask = suppress_non_largest_components_binary(spleen_mask, 2)
 
@@ -200,13 +205,17 @@ def check_organ_location(segmentation_dict, organ_mask, organ_name, AXIS_Z, refe
 
     try:
         z_limit = np.mean(np.argwhere(reference_mask)[:, AXIS_Z])
-    except:
+        if not np.isfinite(z_limit):
+            raise ValueError('empty reference mask')
+    except (TypeError, ValueError, IndexError):
         logger.info(f"[INFO] {patient_id}, (Organ Location Check Module) Organ location check failed with {reference}, now try liver")
         reference_mask = segmentation_dict.get('liver')
 
         try:
             z_limit = np.mean(np.argwhere(reference_mask)[:, AXIS_Z])
-        except:
+            if not np.isfinite(z_limit):
+                raise ValueError('empty liver mask')
+        except (TypeError, ValueError, IndexError):
             logger.info(f"[INFO] {patient_id}, Still failed, skiping ...")
             return organ_mask
         
@@ -345,7 +354,8 @@ def dongli_lung_constraints(
         dict: Updated segmentation dictionary.
     """
 
-    assert target_label in ['lung_left', 'lung_right'], "Target must be 'lung_left' or 'lung_right'"
+    if target_label not in {'lung_left', 'lung_right'}:
+        raise ValueError("Target must be 'lung_left' or 'lung_right'")
     lung_mask = segmentation_dict.get(target_label, None)
 
     if lung_mask is None or not np.any(lung_mask):
@@ -418,8 +428,18 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
             
     """
     
+    lung_left = segmentation_dict.get("lung_left")
+    lung_right = segmentation_dict.get("lung_right")
+    if lung_left is None or lung_right is None:
+        logger.info(f"[WARNING] {patient_id}, (Lung Check Module) Missing lung_left or lung_right in segmentation_dict.")
+        return segmentation_dict
+
     # for the case lung is not in the abdominal reference area
-    segmentation_dict_new = deepcopy(segmentation_dict)
+    segmentation_dict_new = segmentation_dict.copy()
+    for label in ('lung_left', 'lung_right', 'colon'):
+        mask = segmentation_dict_new.get(label)
+        if mask is not None:
+            segmentation_dict_new[label] = mask.copy()
     segmentation_dict_new = dongli_lung_constraints(segmentation_dict_new, axis_map, 'lung_left', patient_id=patient_id, logger=logger)
     segmentation_dict_new = dongli_lung_constraints(segmentation_dict_new, axis_map, 'lung_right', patient_id=patient_id, logger=logger)
     
@@ -427,6 +447,10 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
     if np.sum(segmentation_dict_new.get('lung_left')) == 0 and np.sum(segmentation_dict_new.get('lung_right')) == 0 :
         colon_mask = segmentation_dict_new.get('colon')
         liver_mask = segmentation_dict_new.get('liver')
+
+        if not np.any(colon_mask) or not np.any(liver_mask):
+            logger.info(f"[INFO] {patient_id}, (Lung Check Module) Missing anatomical references; preserving original lungs.")
+            return segmentation_dict
 
         Z = axis_map['z']
         colon_z = np.where(colon_mask)[Z]
@@ -465,8 +489,8 @@ def post_processing_lung(segmentation_dict: dict, axis_map: dict, calibration_st
         logger.info(f"[INFO] {patient_id}, (Lung Check Module) Unbalanced lung split detected. Using fallback split_organ().")
         try:
             right_mask, left_mask = split_organ(mask=lung_mask, axis=axis_map['x'])
-        except:
-            logger.info(f"[INFO] {patient_id}, (Lung Check Module) Fallback split_organ() failed, skip lung post-processing ...")
+        except (ValueError, IndexError) as error:
+            logger.info(f"[INFO] {patient_id}, (Lung Check Module) Fallback split failed: {error}")
 
 
     # Align left/right assignment based on liver position

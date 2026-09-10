@@ -37,12 +37,12 @@ import os
 
 import nibabel as nib
 import numpy as np
-from nibabel.orientations import (apply_orientation, axcodes2ornt,
-                                  io_orientation, ornt_transform)
+from nibabel.processing import resample_from_to
 
 from . import vertebrae_pro_engine as engine
 from .vertebrae_postprocessing import postprocessing_vertebrae as \
     legacy_postprocessing_vertebrae
+from .utils import _grids_overlap
 
 # ShapeKit organ names <-> engine ids (engine: 1 = L5 ... 24 = C1)
 VERTEBRA_NAMES = [f"vertebrae_{n}" for n in engine.NAMES_BOTTOM_UP]
@@ -63,11 +63,24 @@ def _load_ct_aligned(ct_path, reference_img, logger, patient_id):
         return None
     try:
         ct_img = nib.load(ct_path)
-        target_axcodes = nib.aff2axcodes(reference_img.affine)
-        transform = ornt_transform(io_orientation(ct_img.affine),
-                                   axcodes2ornt(target_axcodes))
+        if len(ct_img.shape) != 3:
+            raise ValueError(f"expected a 3D CT, got shape {ct_img.shape}")
+        same_grid = (
+            ct_img.shape == reference_img.shape
+            and np.allclose(ct_img.affine, reference_img.affine,
+                            rtol=1e-5, atol=1e-4)
+        )
+        if not same_grid:
+            if not _grids_overlap(ct_img, reference_img):
+                raise ValueError("CT does not overlap the segmentation reference grid")
+            ct_img = resample_from_to(
+                ct_img,
+                (reference_img.shape, reference_img.affine),
+                order=1,
+                mode='constant',
+                cval=-1024,
+            )
         ct = np.asanyarray(ct_img.dataobj)
-        ct = apply_orientation(ct, transform)
         ct = np.clip(ct, -1024, 3071).astype(np.int16)
     except Exception as e:  # noqa: BLE001 - batch runs must not stall
         logger.warning(
