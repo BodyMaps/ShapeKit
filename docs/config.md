@@ -71,7 +71,27 @@
    engine that repairs vertebra labels against the case CT by recoloring
    inside the prediction envelope (no deletion of predicted bone); it
    requires the case CT and falls back to `shapekit` when the CT is absent.
+   `shapekit_anchor` re-derives the vertebra names from geometry (see the
+   README section "Anchor-and-Slab Vertebrae Engine"); it needs no CT for
+   the naming repair, uses the CT when present to trim soft-tissue leakage,
+   and can optionally draw learned boundaries on a GPU.
 
-8. `ct_file_name` / `ct_root`: how `shapekit_pro` finds the CT. The engine
-   first looks for `<input_case>/<ct_file_name>`; when `ct_root` is set it
-   also tries `<ct_root>/<case_id>/<ct_file_name>`.
+8. `ct_file_name` / `ct_root`: how `shapekit_pro` and `shapekit_anchor` find
+   the CT. The engine first looks for `<input_case>/<ct_file_name>`; when
+   `ct_root` is set it also tries `<ct_root>/<case_id>/<ct_file_name>`.
+
+9. `vertebrae_prompt_model` (`shapekit_anchor` only): `none` (default) keeps
+   the planar disc cuts for rebuilt levels. `nninteractive` replaces each of
+   them by a learned boundary from one point prompt. Needs a CUDA GPU with 8
+   to 10 GB free and `pip install nninteractive`; run with `--cpu_count 1`
+   so that only one copy of the model is loaded. When the package or the GPU
+   is missing the engine logs the reason and keeps the planar cuts.
+   `vertebrae_prompt_device` selects the device (default `cuda:0`).
+
+10. `vertebrae_trust_landmarks` (`shapekit_anchor` only): when the case
+    also has `aorta` and `celiac_trunk` masks, the engine compares the naming
+    they imply (aortic bifurcation near L4, celiac origin near T12) with the
+    network's. `false` (default) only writes `NEEDS_REVIEW` to the log when
+    they disagree; `true` lets the landmarks overrule the network's offset.
+    Landmarks carry about a level of population spread, so the default is to
+    flag rather than to act.

@@ -182,6 +182,79 @@ Output is compatible with the existing 26-based label scheme
 SuPreM standalone postprocessing pipeline on the AbdomenAtlasDemo
 benchmark cases.
 
+# Anchor-and-Slab Vertebrae Engine (ShapeKit-Anchor)
+
+A fourth vertebrae option that starts from a different observation: the
+network is much better at *finding* vertebrae than at *naming* them.
+Localisation is a local texture problem, naming means counting from a
+landmark that is often outside the field of view. So instead of repairing
+labels one at a time, the engine re-derives the naming from the geometry of
+what the network found.
+
+- **Clean spine** (one body per label, consistent order): bodies are ranked
+  along the spine axis and renumbered with one integer offset chosen to
+  agree with the network's own votes. A spine the network named correctly
+  comes back unchanged, cleaned of islands and soft-tissue leakage.
+- **Scrambled spine** (repeated labels, split or merged bodies, names running
+  backwards): the component count carries no information, so the engine
+  finds the *anchors*, the levels the network got right (one body per label,
+  plausible volume, on a smooth curve of position against level), fits that
+  curve, reads off where every other level must sit, and cuts the spine mask
+  into slabs between anchors. Cuts are placed by volume share (each rebuilt
+  level gets its expected fraction of the volume between anchors) and
+  snapped to the mask waist at the disc where one exists. Anchors keep the
+  network's own boundary.
+- **Boundaries**: a balanced watershed lets thoracic levels take back the
+  posterior elements a planar cut hands to the level below, and a one-voxel
+  Gaussian argmax removes the resampling staircase. Optionally, on a GPU,
+  the planar boundary of each rebuilt level is replaced by a learned one
+  from [nnInteractive](https://github.com/MIC-DKFZ/nnInteractive), prompted
+  once at the position the resolver found. Anchors are never prompted.
+- **Honest failure**: when there are too few reliable levels to fit the
+  position model, the engine keeps the network's names and writes
+  `NEEDS_REVIEW` to the log rather than guessing. When the aorta and
+  celiac trunk are also segmented, their implied naming is compared with
+  the network's and a disagreement is flagged the same way.
+
+Everything geometric is computed in millimetres from the affine, never in
+voxels, so thresholds keep their meaning across slice thicknesses.
+
+Enable it in `config.yaml`:
+
+```yaml
+vertebrae_engine: shapekit_anchor
+ct_file_name: ct.nii.gz          # optional: enables the bone check and the prompt stage
+# ct_root: /path/to/ct/cases     # fallback root when CTs live elsewhere
+vertebrae_prompt_model: none     # or nninteractive (GPU, pip install nninteractive)
+```
+
+No new required dependencies (numpy, scipy, nibabel and
+connected-components-3d are already required). CPU only by default: the
+engine takes about 35 s on a 2.5 mm abdominal case and about 2.5 min on a
+0.7 mm whole-spine case on one core, and adds about 2 GB above the masks
+ShapeKit already holds, because it crops to the vertebrae bounding box
+before any per-label pass (the 24 full-size masks themselves are about 9 GB
+on the 0.7 mm case, so budget `--cpu_count` by that). The optional prompt
+stage needs a CUDA GPU with 8 to 10 GB free and adds about a minute per
+rebuilt spine; run with `--cpu_count 1` when it is on so that only one copy
+of the model is loaded. A missing CT, package or GPU is logged and the CPU
+result is returned, so batch runs never stall.
+
+Measured on the AbdomenAtlasDemo cases in the BodyMaps warm-up evaluation
+(human-revised labels, mean DSC over 24 levels): a conservative first
+version that kept the network's names whenever the component count could
+not be trusted scored 76.7%, with L2 to T5 between 20% and 50% on the
+scrambled case; this engine scored 92.8%, every level at or above 90.0%
+(worst T9 90.0%, best L5 96.7%). Running the engine through `main.py` on
+the same inputs reproduces that evaluated output: the correctly named case
+comes back byte-identical, and the scrambled case differs in 6 of 1.43
+million foreground voxels with the prompt stage on. See
+`tests/test_vertebrae_anchor.py` for the synthetic suite ( islands,
+duplicate names, swaps, dropouts, shuffles, an unfixable global shift that
+must be left alone, soft-tissue leakage, the thoracolumbar split-and-merge
+failure, a tapered spine, a partial field of view, and the ShapeKit adapter
+round trip).
+
 # Key Functions
 In addition to these general utilities, anatomical-structures-specific correction functions are available in [organs_postprocessing.py](organs_postprocessing.py).
 
