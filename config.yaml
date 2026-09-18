@@ -99,9 +99,32 @@ if_save_combined_label: True
 #                   deleting bone; every risky stage self-reverts unless it
 #                   can prove improvement. Needs the case CT (see below);
 #                   falls back to the default module when the CT is absent.
+#   shapekit_anchor    - anchor-and-slab engine: re-derives vertebra names from
+#                   geometry (clean spine: rank renumbering anchored to the
+#                   network's votes; scrambled spine: fit the reliable levels,
+#                   cut the rest into slabs by volume share and disc waist).
+#                   No CT needed for the naming repair. With a CT it also
+#                   trims soft-tissue leakage, and with a GPU it can replace
+#                   the planar cuts by learned boundaries (see below).
 vertebrae_engine: shapekit_songlin # use iterative refinement as default option for vertebrae processing
 
-# CT lookup for shapekit_pro: first <input_case>/<ct_file_name>, then
-# <ct_root>/<case_id>/<ct_file_name> when ct_root is set.
+# CT lookup for shapekit_pro and shapekit_anchor: first
+# <input_case>/<ct_file_name>, then <ct_root>/<case_id>/<ct_file_name> when
+# ct_root is set.
 ct_file_name: ct.nii.gz
 # ct_root: /path/to/original/ct/cases
+
+# shapekit_anchor options
+#   vertebrae_prompt_model: none | nninteractive
+#       nninteractive replaces the planar boundary of every rebuilt level by a
+#       learned one (one point prompt per level). Needs a CUDA GPU with 8 to
+#       10 GB free and `pip install nninteractive` (torch 2.x). Run with
+#       --cpu_count 1 when it is on. Missing package or GPU: logged, planar
+#       cuts kept.
+#   vertebrae_trust_landmarks: when the aorta and celiac trunk masks are in
+#       the case, the engine compares the naming they imply with the
+#       network's. false (default) only flags a disagreement in the log as
+#       NEEDS_REVIEW; true lets the landmarks overrule the network.
+vertebrae_prompt_model: none
+vertebrae_prompt_device: cuda:0
+vertebrae_trust_landmarks: false

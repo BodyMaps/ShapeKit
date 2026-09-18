@@ -5,6 +5,7 @@ from utils.organs_postprocessing import *
 from utils.vertebrae_postprocessing import postprocessing_vertebrae
 from utils.vertebrae_iterative import postprocessing_vertebrae as postprocessing_vertebrae_songlin
 from utils.vertebrae_pro import postprocessing_vertebrae_pro
+from utils.vertebrae_anchor import postprocessing_vertebrae_anchor
 import logging
 import yaml
 import traceback
@@ -37,6 +38,9 @@ save_combined_label_bool = bool(config['if_save_combined_label'])
 vertebrae_engine = config.get('vertebrae_engine', 'shapekit')
 ct_file_name = config.get('ct_file_name', 'ct.nii.gz')
 ct_root = config.get('ct_root', None)
+vertebrae_prompt_model = config.get('vertebrae_prompt_model', 'none')
+vertebrae_prompt_device = config.get('vertebrae_prompt_device', 'cuda:0')
+vertebrae_trust_landmarks = bool(config.get('vertebrae_trust_landmarks', False))
 
 ##############################################################
 
@@ -210,6 +214,17 @@ def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.arra
                 segmentation_dict,
                 logger=logger,
             )
+        elif vertebrae_engine == 'shapekit_anchor':
+            segmentation_dict = postprocessing_vertebrae_anchor(
+                patient_id,
+                segmentation_dict,
+                reference_img,
+                ct_path,
+                logger=logger,
+                prompt_model=vertebrae_prompt_model,
+                prompt_device=vertebrae_prompt_device,
+                trust_landmarks=vertebrae_trust_landmarks,
+            )
         else:
             segmentation_dict = postprocessing_vertebrae(
                 patient_id,
@@ -236,6 +251,16 @@ def main(input_path, input_folder_name, output_path=None):
     # --------------------------------------------------------
     
     seg_path = os.path.join(input_path, reference_file_name)
+    if not os.path.exists(seg_path):
+        # affine reference absent (for example a vertebrae-only prediction
+        # folder with no liver mask): use the first mask in the case instead
+        seg_dir = os.path.join(input_path, subfolder_name)
+        candidates = sorted(f for f in os.listdir(seg_dir) if f.endswith('.nii.gz'))
+        if not candidates:
+            raise FileNotFoundError(f"[ERROR] No .nii.gz files found in: {seg_dir}")
+        seg_path = os.path.join(seg_dir, candidates[0])
+        logging.info(f"[INFO] {input_folder_name}: affine reference "
+                     f"{reference_file_name} not found, using {candidates[0]}")
     img = nib.load(seg_path)
     
     segmentation_dict = read_all_segmentations(
