@@ -67,7 +67,12 @@
                 └── veins.nii.gz
     ```
 7. `vertebrae_engine`: which vertebrae module to run. `shapekit` (default)
-   is the existing mask-based module. `shapekit_pro` is the evidence-gated
+   is the existing mask-based module. `shapekit_levels` renumbers the levels
+   when the model names them wrong: it cuts the column at the disc gaps,
+   numbers the vertebrae between them in order, and rewrites only the labels
+   that disagree, leaving consistent ones exactly as predicted. It uses the
+   case CT when one is reachable and still runs without it.
+   `shapekit_pro` is the evidence-gated
    engine that repairs vertebra labels against the case CT by recoloring
    inside the prediction envelope (no deletion of predicted bone); it
    requires the case CT and falls back to `shapekit` when the CT is absent.

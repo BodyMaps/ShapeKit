@@ -94,6 +94,12 @@ if_save_combined_label: True
 # vertebrae engine:
 #   shapekit             - default mask-based module (no CT needed)
 #   shapekit_songlin   - VerSe-inspired iterative refinement loop (no CT needed)
+#   shapekit_levels       - renumbers vertebra levels when the model names them
+#                   wrong (e.g. a collapsed L1 shifts every level above it by
+#                   one). Cuts the column at the disc gaps, numbers the
+#                   vertebrae between them in order, and rewrites only the
+#                   labels that disagree. Uses the CT when present, works
+#                   without it.
 #   shapekit_pro          - evidence-gated repair against the case CT: recolors
 #                   label errors inside the prediction envelope instead of
 #                   deleting bone; every risky stage self-reverts unless it

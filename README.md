@@ -182,6 +182,80 @@ Output is compatible with the existing 26-based label scheme
 SuPreM standalone postprocessing pipeline on the AbdomenAtlasDemo
 benchmark cases.
 
+# Level-Numbering Vertebrae Engine (ShapeKit-Levels)
+
+This engine deals with one specific problem: the model outlines every
+vertebra correctly, but gives some of them the wrong name.
+
+It usually starts with a single bad level. Say the model squashes L1 into a
+thin sliver. Then the real L1 gets called T12, the one above it T11, and so
+on up the spine. Every mask still looks like a normal vertebra, just with
+the wrong label, so the shape-based modules above have nothing to fix.
+
+### How it works
+
+1. Trace a line through the middle of the vertebral bodies.
+2. Walk along that line. There is a disc between every two vertebrae, and
+   the prediction is empty there, so the gaps show where each vertebra
+   starts and ends.
+3. Number the pieces between the gaps in order. A small dynamic program
+   picks the numbering by weighing how clear each gap is, whether the level
+   lengths are realistic, and how well it matches the names the model
+   already gave.
+4. Rename only the labels that don't fit. Vertebral bodies are assigned
+   directly. The posterior parts (arch and spinous process) are grown out
+   from their body through the bone, and if a CT is available, its dark
+   joint spaces act as boundaries.
+
+Anything that is already labelled consistently is left exactly as the model
+predicted it, so on a correctly numbered case the engine changes nothing.
+
+### Usage
+
+```yaml
+vertebrae_engine: shapekit_levels   # default is shapekit_songlin
+ct_file_name: ct.nii.gz             # optional, helps separate the posterior parts
+```
+
+It also runs without a CT. It just loses the joint-space cue.
+
+### Results
+
+Tested on the two AbdomenAtlasDemo cases from the BodyMaps warm-up, using
+SuPreM's `swin_unetr_totalsegmentator_vertebrae` predictions. In case 031
+the mid spine was shifted by one level; case 006 was already right. Average
+DSC over the 24 vertebrae went from 77.3% to 92.8%:
+
+| Level | Before | After |
+|:------|-------:|------:|
+| L1    | 24.2   | 83.6  |
+| T12   | 20.3   | 89.3  |
+| T11   | 35.0   | 91.9  |
+| T10   | 43.7   | 89.7  |
+| T9    | 28.5   | 87.2  |
+| T8    | 52.0   | 88.3  |
+
+No level got worse, and case 006 came back unchanged.
+
+### Speed and memory
+
+No extra dependencies (numpy, scipy, nibabel and scikit-image are already
+required), and it runs on CPU. It only works inside the bounding box of the
+spine, roughly a tenth of the scan, so memory stays around 1 GB even on a
+0.7 mm whole-spine CT. That case takes about 40 seconds on 2 cores; 2.5 mm
+scans take a few seconds.
+
+### Limitations
+
+- So far it has only been checked on two cases.
+- It assumes the usual 24 vertebrae. A patient with an extra lumbar
+  vertebra (L6) or a sacralised L5 will be numbered wrong.
+- It needs the disc gaps to show up in the mask.
+- If the model skips a name completely (T12 straight to T10, with no sliver
+  in between), the engine can carve a thin fake vertebra out of T12 instead
+  of renaming the levels above. Fixing that properly needs information from
+  the CT, not just the mask.
+
 # Key Functions
 In addition to these general utilities, anatomical-structures-specific correction functions are available in [organs_postprocessing.py](organs_postprocessing.py).
 
