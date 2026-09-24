@@ -75,3 +75,33 @@
 8. `ct_file_name` / `ct_root`: how `shapekit_pro` finds the CT. The engine
    first looks for `<input_case>/<ct_file_name>`; when `ct_root` is set it
    also tries `<ct_root>/<case_id>/<ct_file_name>`.
+
+9. `vertebrae_identity`: an optional identity stage applied **before**
+   `vertebrae_engine`. `none` (default) disables it and leaves ShapeKit's
+   behaviour unchanged. `rib_anchor` adjudicates which vertebral level is which
+   from costovertebral rib attachment geometry, then hands the masks to
+   `vertebrae_engine` for the usual shape cleanup.
+
+   It is independent of `vertebrae_engine` rather than a value of it: this stage
+   performs no shape cleanup, so the configured engine still runs afterwards.
+
+   > [!IMPORTANT]
+   > `rib_anchor` requires `vertebrae_engine: shapekit_pro`. Combining it with
+   > the default engine is rejected at startup with a non-zero exit, because
+   > that engine may reassign contiguous cranio-caudal identities and undo the
+   > correction.
+
+   It requires the case CT (located with `ct_file_name` / `ct_root`) and a
+   precomputed TotalSegmentator `total` volume, both on the prediction's voxel
+   grid. Only the rib masks in that volume are read. When either input is
+   missing or sits on a different grid, the stage logs the reason and leaves the
+   masks untouched. See [vertebrae_rib_identity.md](vertebrae_rib_identity.md).
+
+10. `rib_file_name` / `rib_root`: how `rib_anchor` finds the rib volume. It
+    looks for `<input_case>/<rib_file_name>` first, then
+    `<rib_root>/<case_id>/<rib_file_name>`, then `<rib_root>/<case_id>.nii.gz`.
+
+11. `rib_qa_dir`: optional directory for one small JSON QA record per case,
+    holding the ribs used, the ribs rejected for left/right disagreement, the
+    solved per-level displacements, the corrected levels and the voxel counts.
+    Omitted by default.
