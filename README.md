@@ -104,6 +104,15 @@ target_organs: (example)
 Before running any commands, please ensure that `config.yaml` is properly configured. But don't worry! **Most of the configurations do not need to be changed at all.**
 </details>
 
+# Native-Grid Two-Stage Vertebrae Engine (ShapeKit-Hao)
+
+An optional `shapekit_hao` backend integrates v2 component cleanup with
+stable-core, two-scale geodesic correction of L2-T5. It requires aligned CT,
+preserves the other vertebra masks relative to the v2 baseline, and does not
+change the default engine. See [installation, input validation and regression
+instructions](docs/VERTEBRAE_HAO.md). Enable with `--vertebrae_engine shapekit_hao`
+and `--vertebrae_only`; start with `--cpu_count 1` and a new output directory.
+
 # Evidence-Gated Vertebrae Engine (ShapeKit-Pro)
 
 The default vertebrae module works from the masks alone. ShapeKit can now

@@ -92,6 +92,10 @@ affine_reference_file_name: liver.nii.gz
 if_save_combined_label: True
 
 # vertebrae engine:
+#   shapekit_hao         - opt-in native-grid two-stage vertebrae refinement;
+#                   requires matching calibrated CT and target_organs [vertebrae].
+#                   Fails on grid mismatch/missing CT; no legacy fallback.
+#                   See docs/VERTEBRAE_HAO.md for CLI overrides and regression tests.
 #   shapekit             - default mask-based module (no CT needed)
 #   shapekit_songlin   - VerSe-inspired iterative refinement loop (no CT needed)
 #   shapekit_pro          - evidence-gated repair against the case CT: recolors

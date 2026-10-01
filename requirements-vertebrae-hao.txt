@@ -1,0 +1,10 @@
+# Minimal CPU-only environment for main.py and the optional Hao backend.
+# Python 3.10. The inference/training stack in requirements.txt is not required.
+numpy==1.26.4
+scipy==1.15.3
+nibabel==5.4.2
+scikit-image==0.25.2
+connected-components-3d
+tqdm
+matplotlib
+PyYAML
