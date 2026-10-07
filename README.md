@@ -104,6 +104,39 @@ target_organs: (example)
 Before running any commands, please ensure that `config.yaml` is properly configured. But don't worry! **Most of the configurations do not need to be changed at all.**
 </details>
 
+# Disc-Aware Vertebrae Engine (ShapeKit-DAVIR)
+
+Vertebra models usually find the bone well but get the level wrong, for example calling L1 "T12"
+and shifting every name above it. DAVIR fixes the names. It finds each vertebral body between two
+discs along the spine, names all bodies together so that C1 to L5 stay in order, and changes only
+the labels that disagree. Vertebrae that were already right are left exactly as predicted, and each
+vertebral arch goes with the body it is attached to.
+
+Run it like the other engines:
+
+```bash
+python -W ignore main.py --input_folder $INPUT --output_folder $OUTPUT --log_folder $LOG \
+    --vertebrae_engine shapekit_davir --ct_root /path/to/ct/cases --cpu_count 4
+```
+
+Or set the engine once in `config.yaml`:
+
+```yaml
+vertebrae_engine: shapekit_davir
+```
+
+If your cases contain only vertebra masks (for example SuPreM vertebrae predictions), also add
+`--vertebrae_only` to the command.
+
+- The CT is optional. It is looked up as `<case>/ct.nii.gz`, then `<ct_root>/<case>/ct.nii.gz`;
+  with it, thin discs are found more reliably and the mask surface is tidied. Without it, DAVIR
+  runs on the masks alone.
+- No new dependencies, CPU only.
+- On the AbdomenAtlasDemo warm-up cases (SuPreM vertebrae predictions), the refined masks reached
+  a mean DSC of 92.6% in the demo task evaluation.
+- Quick check: `python -m pytest tests/test_vertebrae_davir.py`
+- Standalone version and method details, with more experiments: [ShapeKit-DAVIR](https://github.com/Nikhil-Rao20/ShapeKit-DAVIR)
+
 # Native-Grid Two-Stage Vertebrae Engine (ShapeKit-Hao)
 
 An optional `shapekit_hao` backend integrates v2 component cleanup with
