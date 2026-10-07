@@ -98,6 +98,10 @@ if_save_combined_label: True
 #                   See docs/VERTEBRAE_HAO.md for CLI overrides and regression tests.
 #   shapekit             - default mask-based module (no CT needed)
 #   shapekit_songlin   - VerSe-inspired iterative refinement loop (no CT needed)
+#   shapekit_davir       - disc-aware re-identification (DAVIR): finds the vertebral bodies
+#                   at the discs, names them jointly along the spine and only changes
+#                   labels that disagree. Uses the case CT when available (see below),
+#                   otherwise runs on the masks alone.
 #   shapekit_pro          - evidence-gated repair against the case CT: recolors
 #                   label errors inside the prediction envelope instead of
 #                   deleting bone; every risky stage self-reverts unless it
@@ -105,7 +109,7 @@ if_save_combined_label: True
 #                   falls back to the default module when the CT is absent.
 vertebrae_engine: shapekit_songlin # use iterative refinement as default option for vertebrae processing
 
-# CT lookup for shapekit_pro: first <input_case>/<ct_file_name>, then
+# CT lookup for shapekit_pro and shapekit_davir: first <input_case>/<ct_file_name>, then
 # <ct_root>/<case_id>/<ct_file_name> when ct_root is set.
 ct_file_name: ct.nii.gz
 # ct_root: /path/to/original/ct/cases

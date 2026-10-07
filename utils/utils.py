@@ -636,7 +636,13 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
     # Save each organ mask individually and discard from memory
     for idx, organ in sorted(class_map.items()):
         mask = processed_segmentation_dict.pop(organ, None)
-        if mask is None or not mask.any():
+        if mask is None:
+            continue
+        if not mask.any():
+            # emptied by post-processing: overwrite the copy taken from the input so old labels do not survive
+            stale = os.path.join(seg_folder, f"{organ}.nii.gz")
+            if os.path.exists(stale):
+                nib.save(nib.Nifti1Image(mask.astype(np.uint8), reference_img.affine), stale)
             continue
 
         mask = mask.astype(np.uint8, copy=False)
