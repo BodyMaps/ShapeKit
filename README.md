@@ -113,6 +113,16 @@ change the default engine. See [installation, input validation and regression
 instructions](docs/VERTEBRAE_HAO.md). Enable with `--vertebrae_engine shapekit_hao`
 and `--vertebrae_only`; start with `--cpu_count 1` and a new output directory.
 
+# Anatomical Re-identification Vertebrae Engine (ShapeKit-Aaron)
+
+An optional `shapekit_aaron` engine re-identifies vertebrae from the predicted
+masks alone (no CT, no new dependencies): it orders the vertebral bodies L5 → C1
+by dynamic programming, fixing runs shifted by one level and labels used twice,
+and assigns each posterior element to the body it connects to through the
+pedicles. Enable with `--vertebrae_engine shapekit_aaron` (with
+`--vertebrae_only` to skip other organs) and run it on original predictions. See
+[method, validation and limitations](docs/VERTEBRAE_AARON.md).
+
 # Evidence-Gated Vertebrae Engine (ShapeKit-Pro)
 
 The default vertebrae module works from the masks alone. ShapeKit can now

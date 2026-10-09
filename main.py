@@ -6,6 +6,7 @@ from utils.vertebrae_postprocessing import postprocessing_vertebrae
 from utils.vertebrae_iterative import postprocessing_vertebrae as postprocessing_vertebrae_songlin
 from utils.vertebrae_pro import postprocessing_vertebrae_pro
 from utils.vertebrae_hao import process_case as process_hao_case
+from utils.vertebrae_aaron import postprocessing_vertebrae_aaron
 import logging
 import yaml
 import traceback
@@ -205,6 +206,13 @@ def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.arra
                 ct_path,
                 logger=logger,
             )
+        elif vertebrae_engine == 'shapekit_aaron':
+            segmentation_dict = postprocessing_vertebrae_aaron(
+                patient_id,
+                segmentation_dict,
+                reference_img,
+                logger=logger,
+            )
         elif vertebrae_engine == 'shapekit_songlin':
             segmentation_dict = postprocessing_vertebrae_songlin(
                 patient_id,
@@ -346,7 +354,7 @@ parser.add_argument('--csv', type=str, default=None, help='Guidence csv file tel
 parser.add_argument('--cpu_count', type=int, default=cpu_count(), help='Number of CPU cores to use for parallel processing (default: system max)')
 parser.add_argument('--continue_prediction', action="store_true", help='If continue from last processing record')
 parser.add_argument('--tqdm_ncols', type=int, default=100, help='Width of tqdm progress bar in characters')
-parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao'],
+parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_aaron'],
                     help='Override config.yaml vertebrae engine for this run')
 parser.add_argument('--vertebrae_only', action='store_true', help='Process vertebrae only')
 parser.add_argument('--ct_root', help='Override external case CT root for this run')
@@ -363,11 +371,14 @@ if args.ct_root is not None:
 
 # set up logging 
 os.makedirs(args.log_folder, exist_ok=True)
+# force=True: an engine import may already have attached a handler to the root
+# logger, which would otherwise turn this call into a no-op (no debug.log)
 logging.basicConfig(
     filename=f'{args.log_folder}/debug.log',  
     level=logging.DEBUG,
     format='[%(levelname)s] %(asctime)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%Y-%m-%d %H:%M:%S',
+    force=True,
 )
 
 post_logger = logging.getLogger("postprocessing")

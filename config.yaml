@@ -103,6 +103,9 @@ if_save_combined_label: True
 #                   deleting bone; every risky stage self-reverts unless it
 #                   can prove improvement. Needs the case CT (see below);
 #                   falls back to the default module when the CT is absent.
+#   shapekit_aaron       - mask-only anatomical re-identification (no CT needed):
+#                   dynamic-programming L5 -> C1 ordering of body cores, posterior
+#                   elements assigned through the pedicles. See docs/VERTEBRAE_AARON.md.
 vertebrae_engine: shapekit_songlin # use iterative refinement as default option for vertebrae processing
 
 # CT lookup for shapekit_pro: first <input_case>/<ct_file_name>, then
