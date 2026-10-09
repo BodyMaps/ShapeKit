@@ -81,6 +81,10 @@ Runtime (engine only, one core): about 1.5 min for case 006 (2.5 mm slices) and
   small to define a vertebra reliably, so they are cleaned but not re-identified.
 - **Posterior elements depend on the AI's partition.** In case 031 the L2 spinous
   process, which hangs down to the L2/L3 disc, is labeled L3.
+- **Step A can keep a false positive near the spine.** Because the kept set grows as
+  a chain, any blob of 2 ml or more within 10 mm of the spine (or of a piece already
+  kept) is kept and labeled with the vertebrae, e.g. a mislabeled rib head or
+  calcification touching a vertebra.
 - **Not idempotent.** Path costs depend on the input labels; a second pass changes
   680 voxels in case 006 and about 12,000 in case 031.
 - **Ribs are not handled.**
