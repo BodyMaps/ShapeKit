@@ -371,11 +371,14 @@ if args.ct_root is not None:
 
 # set up logging 
 os.makedirs(args.log_folder, exist_ok=True)
+# force=True: an engine import may already have attached a handler to the root
+# logger, which would otherwise turn this call into a no-op (no debug.log)
 logging.basicConfig(
     filename=f'{args.log_folder}/debug.log',  
     level=logging.DEBUG,
     format='[%(levelname)s] %(asctime)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%Y-%m-%d %H:%M:%S',
+    force=True,
 )
 
 post_logger = logging.getLogger("postprocessing")
