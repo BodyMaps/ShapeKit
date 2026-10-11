@@ -98,6 +98,10 @@ if_save_combined_label: True
 #                   See docs/VERTEBRAE_HAO.md for CLI overrides and regression tests.
 #   shapekit             - default mask-based module (no CT needed)
 #   shapekit_songlin   - VerSe-inspired iterative refinement loop (no CT needed)
+#   shapekit_asfand      - mask-only level counting: finds discs from gaps along the
+#                   vertebral body centre line, counts bodies up from L5 and relabels
+#                   only a drifted range (e.g. 12 thoracic labels on 13 bodies).
+#                   No CT needed. See docs/VERTEBRAE_ASFAND.md.
 #   shapekit_pro          - evidence-gated repair against the case CT: recolors
 #                   label errors inside the prediction envelope instead of
 #                   deleting bone; every risky stage self-reverts unless it
