@@ -228,7 +228,7 @@ def main(input_path, input_folder_name, output_path=None):
     input_path: the folder path
     """
     
-    if vertebrae_engine in ('shapekit_hao', 'shapekit_ct_refinement'):
+    if vertebrae_engine in ('shapekit_hao', 'shapekit_ct_refinement', 'shapekit_components'):
         # Isolate the evaluated algorithm from legacy organ cleanup and IO.
         # The strict adapter validates each mask/CT grid and writes zero masks.
         if target_organs != {'vertebrae'}:
@@ -236,6 +236,14 @@ def main(input_path, input_folder_name, output_path=None):
         ct_path = os.path.join(input_path, ct_file_name)
         if not os.path.exists(ct_path) and ct_root is not None:
             ct_path = os.path.join(ct_root, input_folder_name, ct_file_name)
+        if vertebrae_engine == 'shapekit_components':
+            from utils.vertebrae_components import process_case as process_component_case
+            if not args.component_plan_root:
+                raise ValueError('shapekit_components requires --component_plan_root')
+            return process_component_case(
+                input_path, os.path.join(output_path, input_folder_name),
+                ct_path, class_map, subfolder_name=subfolder_name,
+                plan_path=os.path.join(args.component_plan_root, input_folder_name + '.json'))
         processor = process_ct_refinement_case if vertebrae_engine == 'shapekit_ct_refinement' else process_hao_case
         return processor(
             input_path, os.path.join(output_path, input_folder_name),
@@ -348,11 +356,12 @@ parser.add_argument('--csv', type=str, default=None, help='Guidence csv file tel
 parser.add_argument('--cpu_count', type=int, default=cpu_count(), help='Number of CPU cores to use for parallel processing (default: system max)')
 parser.add_argument('--continue_prediction', action="store_true", help='If continue from last processing record')
 parser.add_argument('--tqdm_ncols', type=int, default=100, help='Width of tqdm progress bar in characters')
-parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_ct_refinement'],
+parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_ct_refinement', 'shapekit_components'],
                     help='Override config.yaml vertebrae engine for this run')
 parser.add_argument('--vertebrae_only', action='store_true', help='Process vertebrae only')
 parser.add_argument('--ct_root', help='Override external case CT root for this run')
 parser.add_argument('--case', action='append', help='Process only this case folder (repeatable)')
+parser.add_argument('--component_plan_root', help='Directory of explicit per-case component review plans')
 args = parser.parse_args()
 if args.vertebrae_engine is not None:
     vertebrae_engine = args.vertebrae_engine
@@ -395,9 +404,11 @@ if __name__ == '__main__':
 
     if input_folder is None or output_folder is None:
         parser.error('--input_folder and --output_folder are required')
+    if vertebrae_engine == 'shapekit_components' and not args.component_plan_root:
+        parser.error('shapekit_components requires --component_plan_root')
     if args.cpu_count < 1:
         parser.error('--cpu_count must be at least 1')
-    if vertebrae_engine in ('shapekit_hao', 'shapekit_ct_refinement'):
+    if vertebrae_engine in ('shapekit_hao', 'shapekit_ct_refinement', 'shapekit_components'):
         if target_organs != {'vertebrae'}:
             parser.error(f'{vertebrae_engine} requires --vertebrae_only')
         if args.continue_prediction:

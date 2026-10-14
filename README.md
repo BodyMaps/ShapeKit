@@ -191,6 +191,14 @@ Output is compatible with the existing 26-based label scheme
 SuPreM standalone postprocessing pipeline on the AbdomenAtlasDemo
 benchmark cases.
 
+# Reviewed Component Vertebrae Engine
+
+The optional `shapekit_components` engine integrates reviewed component relabeling,
+local geodesic splits, and physical face-contact corrections. It requires an
+explicit input-matched review plan for every case; it does not automatically
+identify vertebral levels. Existing defaults remain unchanged.
+See [usage, validation, and limitations](docs/VERTEBRAE_COMPONENTS.md).
+
 # Key Functions
 In addition to these general utilities, anatomical-structures-specific correction functions are available in [organs_postprocessing.py](organs_postprocessing.py).
 
