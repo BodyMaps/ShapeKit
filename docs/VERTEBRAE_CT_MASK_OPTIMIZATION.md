@@ -94,9 +94,10 @@ Cases are written to a staging directory under `.incomplete` and published by re
 python -m unittest tests.test_vertebrae_ct_mask_optimization -v
 ```
 
-Twelve synthetic tests cover:
+Thirteen synthetic tests cover:
 
 - empty input and label mapping;
+- the safety-check fallback (the model's labels kept, the reason in the report);
 - preservation of other masks;
 - output geometry in a non-RAS orientation;
 - overlapping, non-binary and mismatched masks;
@@ -106,7 +107,7 @@ Twelve synthetic tests cover:
 - invalid settings;
 - existing or nested outputs.
 
-A thirteenth test compares the adapter's output with a reference voxel for voxel when demo data is configured. The reference can be made with the engine's own command line, which reads each case's `combined_labels.nii.gz` as written by the model:
+A further test compares the adapter's output with a reference voxel for voxel when demo data is configured. The reference can be made with the engine's own command line, which reads each case's `combined_labels.nii.gz` as written by the model:
 
 ```sh
 python utils/vertebrae_ct_mask_optimization_engine.py --input /path/to/predictions --output /path/to/reference --ct_root /path/to/ct_root

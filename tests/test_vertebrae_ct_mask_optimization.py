@@ -76,6 +76,17 @@ class CTMaskOptimizationAdapterTests(unittest.TestCase):
         self.assertEqual(combined[12, 12, 12], 26)
         self.assertEqual(combined[0, 0, 0], 5)
 
+    def test_unreliable_bodies_keep_the_model_labels_and_report_the_reason(self):
+        # an 8 mm cube is too small to hold a vertebral body, so the safety checks must skip steps 1-4
+        self.mask(VERTEBRA_NAMES[0], self.cube())
+        report = self.run_case()
+        self.assertEqual(report["status"], "steps 1-4 skipped (bodies not reliable)")
+        self.assertTrue(any("Steps 1-4 skipped" in line and "vertebral bodies were found" in line
+                            for line in report["log"]))
+        self.assertEqual(report["changed_cm3"], 0.0)
+        out = np.asarray(nib.load(self.output / "segmentations" / f"{VERTEBRA_NAMES[0]}.nii.gz").dataobj)
+        self.assertTrue(np.array_equal(out, self.cube()))
+
     def test_output_keeps_the_input_grid_in_any_orientation(self):
         affine = np.diag([-1.0, -1.0, 2.0, 1.0])                 # LPS, 2 mm slices
         self.mask(VERTEBRA_NAMES[0], self.cube(), affine)
