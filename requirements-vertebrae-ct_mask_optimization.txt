@@ -1,0 +1,12 @@
+# shapekit_ct_mask_optimization vertebrae engine (utils/vertebrae_ct_mask_optimization*.py).
+# Output verified identical in two environments: Python 3.9.23 with numpy 1.23.5, scipy 1.13.1, nibabel 5.3.3,
+# connected-components-3d 4.1.0, scikit-image 0.24.0; and Python 3.13.1 with numpy 2.5.4, scipy 1.18.1,
+# nibabel 5.4.2, connected-components-3d 4.1.0, scikit-image 0.26.0. The lower bounds are the older environment.
+numpy>=1.23.5
+scipy>=1.13.1
+nibabel>=5.3.3
+connected-components-3d>=4.1.0
+scikit-image>=0.24.0
+# for ShapeKit's main.py
+PyYAML
+tqdm
