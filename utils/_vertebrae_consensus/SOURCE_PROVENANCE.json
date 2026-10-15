@@ -1,0 +1,69 @@
+{
+  "source": "Hongkang Chu, submitted warmup code (10 October 2026)",
+  "packaging_changes": "Removed cohort-specific CLIs, unused imports, and absolute paths; local imports are package relative. Numerical function ASTs are unchanged. Hao is reused from upstream utils/vertebrae_hao_engine.py.",
+  "modules": {
+    "postprocessing_causal": {
+      "original_source_sha256": "575407a582224d227d6aca3fd0d17025a2fb544a4875623dc6a4e91fcb35cfd5",
+      "function_ast_sha256": {
+        "body_anchors": "c73b06799617d0a14fd3afbbc5b114c200f07907b447da018987899e28148474",
+        "sweep_one": "66b87bb514cc7bf375f399a45fb423c2e2abc5c2c81378769949aac126a5fcf5",
+        "refine": "383a8c74216dd7c4b95d7a8f2116a9d012892e196e657131d0ad8adee475ba55"
+      }
+    },
+    "cervicothoracic_causal": {
+      "original_source_sha256": "9bd8d45aba3b06ea08e99cc13461c3cd299ae0297b2bf76a7a107785a923f675",
+      "function_ast_sha256": {
+        "body_anchors": "8f777f115de7e1978a1a7827a421dfdcb8e1cc190929e9dcf29f566b60478738",
+        "sweep": "48f4bb81c11cec1a8fa0b076898595c2a290841e8c41fdb816ba689342c96500",
+        "refine": "20ad28b7f7dda80dd3b9124e4f19232fc0606c3dd906e5bc6f8564fc3937979b"
+      }
+    },
+    "native_anchor_pipeline": {
+      "original_source_sha256": "3678bb2b0de2443bc9ce979c0c79f6d48b89f6913b62ea91fb542dc0969cc08a",
+      "function_ast_sha256": {
+        "crop_band": "de12b85e031bd40b43fe7e297ce47e72e98720b2689db7fe321623558f782728",
+        "refine": "ace3ddfab513f5a9b57c8ed2cadf47249353c5a9b0e4267178600c172fdb6899"
+      }
+    },
+    "body_root_guided": {
+      "original_source_sha256": "3928b011f576391904b3582434d599d3986af656dff947fe173cb1ade16a4459",
+      "function_ast_sha256": {
+        "Region": "a9fc8219404ed96bddffa7bf6b9de51565343276b5820463f5673b3378d8c8d9",
+        "centers_and_seeds": "2d5a9fcb86d899f8385856b5ecf9f47299b946e61930d46ce57891a096fe6353",
+        "refine_region": "77eb4498b23a0bc1653baf7a3f60cd5ca0b14a0ab6c83f4bdd4ecc035de1fb8e",
+        "refine": "b5be93ecb7054533ba478d13bff1ad66754243e27c7c7f27adb1136d289bd428"
+      }
+    },
+    "body_root_guided_consistency": {
+      "original_source_sha256": "c234844cdd3eb0e5796a9111d9696abfbb4cf608a909964f6c666cfcc6f17241",
+      "function_ast_sha256": {
+        "chain_audit": "2243d0fe2fe92a7f6a7e43032a9fe07ef414baae9340da3b0d137c4c3237cd91",
+        "refine": "d53f1fe5eeaf60e9ee8ec1ad56a77148ddb7d06433fcec88a1f3685687edf0db"
+      }
+    },
+    "component_identity_transfer": {
+      "original_source_sha256": "eee91e5eda30652e944a4ea08a9df69266b290b62f0dcf28b4e911563c4852b4",
+      "function_ast_sha256": {
+        "source_cores": "403c14f06588bac89c3474b84c444ff755d3cc1ba4e6436d674bbd932e45637f"
+      }
+    },
+    "global_body_identity_graph": {
+      "original_source_sha256": "a34ad0e6fc8223ee37b64a94a36143e42a5bc3f4d3fa952ce642da8fd4e033fe",
+      "function_ast_sha256": {
+        "refine": "1bb00a2792f35c29affdfb4a1255965f8ce695a977f8468547518022c39752d3"
+      }
+    },
+    "global_body_offset_gate": {
+      "original_source_sha256": "c1dc2b6aa1c6f9f58be91fcb6227e084fa8653e1e27ed85e581134711c839aa7",
+      "function_ast_sha256": {
+        "filter_proposal": "d93764869b1689d63bc938ff49658356cf46544f3676c2eb372246b3246102df"
+      }
+    },
+    "consensus_boundary": {
+      "original_source_sha256": "ddb66b7e6c6d53ca39453a1bba1a102b4879c6bb27a64d349716d154cd01d3c3",
+      "function_ast_sha256": {
+        "refine": "e82d876d91d9502d58de01715d6a739b82b3a989572c131b00d136197f93fdcf"
+      }
+    }
+  }
+}

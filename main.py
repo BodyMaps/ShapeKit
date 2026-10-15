@@ -7,6 +7,7 @@ from utils.vertebrae_iterative import postprocessing_vertebrae as postprocessing
 from utils.vertebrae_pro import postprocessing_vertebrae_pro
 from utils.vertebrae_hao import process_case as process_hao_case
 from utils.vertebrae_ct_refinement import process_case as process_ct_refinement_case
+from utils.vertebrae_consensus import process_case as process_consensus_case
 import logging
 import yaml
 import traceback
@@ -228,7 +229,7 @@ def main(input_path, input_folder_name, output_path=None):
     input_path: the folder path
     """
     
-    if vertebrae_engine in ('shapekit_hao', 'shapekit_ct_refinement'):
+    if vertebrae_engine in ('shapekit_hao', 'shapekit_ct_refinement', 'shapekit_consensus'):
         # Isolate the evaluated algorithm from legacy organ cleanup and IO.
         # The strict adapter validates each mask/CT grid and writes zero masks.
         if target_organs != {'vertebrae'}:
@@ -236,6 +237,14 @@ def main(input_path, input_folder_name, output_path=None):
         ct_path = os.path.join(input_path, ct_file_name)
         if not os.path.exists(ct_path) and ct_root is not None:
             ct_path = os.path.join(ct_root, input_folder_name, ct_file_name)
+        if vertebrae_engine == 'shapekit_consensus':
+            return process_consensus_case(
+                input_path, os.path.join(output_path, input_folder_name),
+                ct_path, class_map, subfolder_name=subfolder_name,
+                suprem_path=os.path.join(args.suprem_root, input_folder_name),
+                v3_path=os.path.join(args.totalseg_v3_root, input_folder_name),
+                input_stage=args.consensus_input_stage,
+                save_stages=args.consensus_save_stages)
         processor = process_ct_refinement_case if vertebrae_engine == 'shapekit_ct_refinement' else process_hao_case
         return processor(
             input_path, os.path.join(output_path, input_folder_name),
@@ -345,14 +354,21 @@ parser.add_argument('--input_folder', type=str, help='Input files folder locatio
 parser.add_argument('--output_folder', type=str, help='Output files folder location, /path/to/save/results')
 parser.add_argument('--log_folder', type=str, default='./logs/task_001', help='Logging folder location')
 parser.add_argument('--csv', type=str, default=None, help='Guidence csv file telling ShapeKit specific ones for processing')
-parser.add_argument('--cpu_count', type=int, default=cpu_count(), help='Number of CPU cores to use for parallel processing (default: system max)')
+parser.add_argument('--cpu_count', type=int, default=None,
+                    help='Case workers (default: 1 for consensus, system max for existing engines)')
 parser.add_argument('--continue_prediction', action="store_true", help='If continue from last processing record')
 parser.add_argument('--tqdm_ncols', type=int, default=100, help='Width of tqdm progress bar in characters')
-parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_ct_refinement'],
+parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_ct_refinement', 'shapekit_consensus'],
                     help='Override config.yaml vertebrae engine for this run')
 parser.add_argument('--vertebrae_only', action='store_true', help='Process vertebrae only')
 parser.add_argument('--ct_root', help='Override external case CT root for this run')
 parser.add_argument('--case', action='append', help='Process only this case folder (repeatable)')
+parser.add_argument('--suprem_root', help='Consensus: raw SuPreM cases, or corrected anchors in prepared mode')
+parser.add_argument('--totalseg_v3_root', help='Consensus: raw TotalSegmentator v3 cases, or aligned v3 in prepared mode')
+parser.add_argument('--consensus_input_stage', choices=['raw', 'prepared'], default='raw',
+                    help='Consensus: full CPU chain from raw predictions, or final boundary replay')
+parser.add_argument('--consensus_save_stages', action='store_true',
+                    help='Consensus: save intermediate combined maps with internal IDs 1..24')
 args = parser.parse_args()
 if args.vertebrae_engine is not None:
     vertebrae_engine = args.vertebrae_engine
@@ -360,6 +376,8 @@ if args.vertebrae_only:
     target_organs = {'vertebrae'}
 if args.ct_root is not None:
     ct_root = args.ct_root
+if args.cpu_count is None:
+    args.cpu_count = 1 if vertebrae_engine == 'shapekit_consensus' else cpu_count()
 
 
 
@@ -397,14 +415,19 @@ if __name__ == '__main__':
         parser.error('--input_folder and --output_folder are required')
     if args.cpu_count < 1:
         parser.error('--cpu_count must be at least 1')
-    if vertebrae_engine in ('shapekit_hao', 'shapekit_ct_refinement'):
+    if vertebrae_engine in ('shapekit_hao', 'shapekit_ct_refinement', 'shapekit_consensus'):
         if target_organs != {'vertebrae'}:
             parser.error(f'{vertebrae_engine} requires --vertebrae_only')
         if args.continue_prediction:
             parser.error(f'{vertebrae_engine} uses new case directories; do not use --continue_prediction')
         from pathlib import Path
         hao_output = Path(output_folder).resolve()
-        for source in (input_folder, ct_root):
+        if vertebrae_engine == 'shapekit_consensus':
+            if not args.suprem_root or not args.totalseg_v3_root:
+                parser.error('shapekit_consensus requires --suprem_root and --totalseg_v3_root')
+        for source in (input_folder, ct_root,
+                       args.suprem_root if vertebrae_engine == 'shapekit_consensus' else None,
+                       args.totalseg_v3_root if vertebrae_engine == 'shapekit_consensus' else None):
             if source is not None:
                 hao_source = Path(source).resolve()
                 if (hao_source == hao_output or hao_source in hao_output.parents
