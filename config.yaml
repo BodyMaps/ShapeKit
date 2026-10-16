@@ -103,9 +103,20 @@ if_save_combined_label: True
 #                   deleting bone; every risky stage self-reverts unless it
 #                   can prove improvement. Needs the case CT (see below);
 #                   falls back to the default module when the CT is absent.
+#   shapekit_ct_mask_optimization - opt-in CT-guided correction of the 24 vertebra
+#                   masks: renumbers the bodies, moves arches and spinous processes
+#                   to the vertebra they belong to, cleans up stray pieces; skips
+#                   renumbering when its safety checks fail. Requires the case CT
+#                   on the masks' grid and --vertebrae_only.
+#                   See docs/VERTEBRAE_CT_MASK_OPTIMIZATION.md.
 vertebrae_engine: shapekit_songlin # use iterative refinement as default option for vertebrae processing
 
 # CT lookup for shapekit_pro: first <input_case>/<ct_file_name>, then
 # <ct_root>/<case_id>/<ct_file_name> when ct_root is set.
 ct_file_name: ct.nii.gz
 # ct_root: /path/to/original/ct/cases
+
+# shapekit_ct_mask_optimization when a case's CT is missing:
+#   fail             - the case fails with a message (default)
+#   shapekit_songlin - process that case's vertebrae with shapekit_songlin instead
+ct_mask_optimization_missing_ct: fail

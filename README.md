@@ -104,6 +104,17 @@ target_organs: (example)
 Before running any commands, please ensure that `config.yaml` is properly configured. But don't worry! **Most of the configurations do not need to be changed at all.**
 </details>
 
+# CT-Guided Vertebra Mask Optimization (ShapeKit-CT-Mask-Optimization)
+
+An optional `shapekit_ct_mask_optimization` engine corrects all 24 vertebra
+masks against the case CT. It renumbers the vertebral bodies, moves arches and
+spinous processes to the vertebra they belong to, and cleans up stray and
+detached pieces. Safety checks keep the model's labels when the bodies cannot
+be trusted. It does not change the default engine. Enable it with
+`--vertebrae_engine shapekit_ct_mask_optimization` and `--vertebrae_only`. A
+worker needs about 3 GB of memory and 1-3 minutes per case. See
+[method, input requirements and validation](docs/VERTEBRAE_CT_MASK_OPTIMIZATION.md).
+
 # Native-Grid Two-Stage Vertebrae Engine (ShapeKit-Hao)
 
 An optional `shapekit_hao` backend integrates v2 component cleanup with
