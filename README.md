@@ -104,6 +104,15 @@ target_organs: (example)
 Before running any commands, please ensure that `config.yaml` is properly configured. But don't worry! **Most of the configurations do not need to be changed at all.**
 </details>
 
+# Multi-model Vertebrae Consensus (optional)
+
+`shapekit_consensus` integrates Hongkang Chu's warmup postprocessing chain:
+original Hao refinement, SuPreM identity anchors, dual-chain checks, v3 identity
+alignment, and agreement-based boundary edits. Supply raw predictions from all
+three models, or replay the final stage from prepared predictions. It runs on
+CPU, writes each completed case atomically, and leaves the default engine
+unchanged. See [inputs, commands, limitations, and regression checks](docs/VERTEBRAE_CONSENSUS.md).
+
 # Native-Grid Two-Stage Vertebrae Engine (ShapeKit-Hao)
 
 An optional `shapekit_hao` backend integrates v2 component cleanup with
