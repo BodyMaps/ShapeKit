@@ -113,6 +113,17 @@ change the default engine. See [installation, input validation and regression
 instructions](docs/VERTEBRAE_HAO.md). Enable with `--vertebrae_engine shapekit_hao`
 and `--vertebrae_only`; start with `--cpu_count 1` and a new output directory.
 
+# Level-Counting Vertebrae Engine (ShapeKit-Asfand)
+
+An optional, mask-only `shapekit_asfand` backend fixes label drift, where a
+run of vertebral bodies carries labels shifted by one level (e.g. 12 thoracic
+labels on 13 bodies). It finds the discs from unlabelled gaps along the
+vertebral body centre line, counts bodies upward from L5, and relabels only
+the range where the count and the model disagree, growing each body's label
+through the bone into its posterior elements. No CT needed. See
+[method, results and limitations](docs/VERTEBRAE_ASFAND.md). Enable with
+`--vertebrae_engine shapekit_asfand`.
+
 # Evidence-Gated Vertebrae Engine (ShapeKit-Pro)
 
 The default vertebrae module works from the masks alone. ShapeKit can now
