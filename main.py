@@ -7,6 +7,7 @@ from utils.vertebrae_iterative import postprocessing_vertebrae as postprocessing
 from utils.vertebrae_pro import postprocessing_vertebrae_pro
 from utils.vertebrae_hao import process_case as process_hao_case
 from utils.vertebrae_ct_refinement import process_case as process_ct_refinement_case
+from utils.vertebrae_davir import postprocessing_vertebrae_davir
 import logging
 import yaml
 import traceback
@@ -206,6 +207,14 @@ def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.arra
                 ct_path,
                 logger=logger,
             )
+        elif vertebrae_engine == 'shapekit_davir':
+            segmentation_dict = postprocessing_vertebrae_davir(
+                patient_id,
+                segmentation_dict,
+                reference_img,
+                ct_path,
+                logger=logger,
+            )
         elif vertebrae_engine == 'shapekit_songlin':
             segmentation_dict = postprocessing_vertebrae_songlin(
                 patient_id,
@@ -251,6 +260,10 @@ def main(input_path, input_folder_name, output_path=None):
     # --------------------------------------------------------
     
     seg_path = os.path.join(input_path, reference_file_name)
+    if not os.path.exists(seg_path):
+        # e.g. vertebrae-only cases have no liver mask: use any mask of the case as reference
+        seg_dir = os.path.join(input_path, subfolder_name)
+        seg_path = os.path.join(seg_dir, sorted(f for f in os.listdir(seg_dir) if f.endswith('.nii.gz'))[0])
     img = nib.load(seg_path)
     
     segmentation_dict = read_all_segmentations(
@@ -348,7 +361,7 @@ parser.add_argument('--csv', type=str, default=None, help='Guidence csv file tel
 parser.add_argument('--cpu_count', type=int, default=cpu_count(), help='Number of CPU cores to use for parallel processing (default: system max)')
 parser.add_argument('--continue_prediction', action="store_true", help='If continue from last processing record')
 parser.add_argument('--tqdm_ncols', type=int, default=100, help='Width of tqdm progress bar in characters')
-parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_ct_refinement'],
+parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_davir', 'shapekit_ct_refinement'],
                     help='Override config.yaml vertebrae engine for this run')
 parser.add_argument('--vertebrae_only', action='store_true', help='Process vertebrae only')
 parser.add_argument('--ct_root', help='Override external case CT root for this run')
