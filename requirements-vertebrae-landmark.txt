@@ -1,0 +1,8 @@
+numpy==2.5.3
+scipy==1.18.1
+nibabel==5.4.2
+connected-components-3d==4.1.0
+scikit-image==0.26.0
+matplotlib==3.11.1
+PyYAML==6.0.3
+tqdm==4.70.0

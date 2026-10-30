@@ -7,6 +7,7 @@ from utils.vertebrae_iterative import postprocessing_vertebrae as postprocessing
 from utils.vertebrae_pro import postprocessing_vertebrae_pro
 from utils.vertebrae_hao import process_case as process_hao_case
 from utils.vertebrae_ct_refinement import process_case as process_ct_refinement_case
+from utils.vertebrae_landmark import process_case as process_landmark_case
 import logging
 import yaml
 import traceback
@@ -39,6 +40,8 @@ save_combined_label_bool = bool(config['if_save_combined_label'])
 vertebrae_engine = config.get('vertebrae_engine', 'shapekit')
 ct_file_name = config.get('ct_file_name', 'ct.nii.gz')
 ct_root = config.get('ct_root', None)
+# engines that read masks + CT themselves and write new case folders
+ISOLATED_ENGINES = ('shapekit_hao', 'shapekit_ct_refinement', 'shapekit_landmark')
 
 ##############################################################
 
@@ -228,7 +231,7 @@ def main(input_path, input_folder_name, output_path=None):
     input_path: the folder path
     """
     
-    if vertebrae_engine in ('shapekit_hao', 'shapekit_ct_refinement'):
+    if vertebrae_engine in ISOLATED_ENGINES:
         # Isolate the evaluated algorithm from legacy organ cleanup and IO.
         # The strict adapter validates each mask/CT grid and writes zero masks.
         if target_organs != {'vertebrae'}:
@@ -236,7 +239,8 @@ def main(input_path, input_folder_name, output_path=None):
         ct_path = os.path.join(input_path, ct_file_name)
         if not os.path.exists(ct_path) and ct_root is not None:
             ct_path = os.path.join(ct_root, input_folder_name, ct_file_name)
-        processor = process_ct_refinement_case if vertebrae_engine == 'shapekit_ct_refinement' else process_hao_case
+        processor = {'shapekit_ct_refinement': process_ct_refinement_case,
+                     'shapekit_landmark': process_landmark_case}.get(vertebrae_engine, process_hao_case)
         return processor(
             input_path, os.path.join(output_path, input_folder_name),
             ct_path, class_map, subfolder_name=subfolder_name)
@@ -348,7 +352,7 @@ parser.add_argument('--csv', type=str, default=None, help='Guidence csv file tel
 parser.add_argument('--cpu_count', type=int, default=cpu_count(), help='Number of CPU cores to use for parallel processing (default: system max)')
 parser.add_argument('--continue_prediction', action="store_true", help='If continue from last processing record')
 parser.add_argument('--tqdm_ncols', type=int, default=100, help='Width of tqdm progress bar in characters')
-parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_ct_refinement'],
+parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_ct_refinement', 'shapekit_landmark'],
                     help='Override config.yaml vertebrae engine for this run')
 parser.add_argument('--vertebrae_only', action='store_true', help='Process vertebrae only')
 parser.add_argument('--ct_root', help='Override external case CT root for this run')
@@ -397,7 +401,7 @@ if __name__ == '__main__':
         parser.error('--input_folder and --output_folder are required')
     if args.cpu_count < 1:
         parser.error('--cpu_count must be at least 1')
-    if vertebrae_engine in ('shapekit_hao', 'shapekit_ct_refinement'):
+    if vertebrae_engine in ISOLATED_ENGINES:
         if target_organs != {'vertebrae'}:
             parser.error(f'{vertebrae_engine} requires --vertebrae_only')
         if args.continue_prediction:

@@ -113,6 +113,16 @@ change the default engine. See [installation, input validation and regression
 instructions](docs/VERTEBRAE_HAO.md). Enable with `--vertebrae_engine shapekit_hao`
 and `--vertebrae_only`; start with `--cpu_count 1` and a new output directory.
 
+# Landmark-Numbering Vertebrae Engine (ShapeKit-Landmark)
+
+An optional `shapekit_landmark` backend numbers T1-L5 by counting vertebral
+bodies between L5 and C7 and checking that the last rib-bearing body is T12,
+then gives each arch the name of its body and moves detached fragments to the
+vertebra they touch. Each step keeps its result only if anatomical checks
+pass. It requires aligned CT and does not change the default engine. See
+[instructions and regression checks](docs/VERTEBRAE_LANDMARK.md). Enable with
+`--vertebrae_engine shapekit_landmark --vertebrae_only` and a new output directory.
+
 # Evidence-Gated Vertebrae Engine (ShapeKit-Pro)
 
 The default vertebrae module works from the masks alone. ShapeKit can now

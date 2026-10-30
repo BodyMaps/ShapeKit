@@ -103,6 +103,9 @@ if_save_combined_label: True
 #                   deleting bone; every risky stage self-reverts unless it
 #                   can prove improvement. Needs the case CT (see below);
 #                   falls back to the default module when the CT is absent.
+#   shapekit_landmark    - opt-in landmark numbering (count bodies L5..C7, rib check)
+#                   + arches follow their body + fragment reassignment;
+#                   requires matching calibrated CT and target_organs [vertebrae].
 vertebrae_engine: shapekit_songlin # use iterative refinement as default option for vertebrae processing
 
 # CT lookup for shapekit_pro: first <input_case>/<ct_file_name>, then
