@@ -109,3 +109,6 @@ vertebrae_engine: shapekit_songlin # use iterative refinement as default option 
 # <ct_root>/<case_id>/<ct_file_name> when ct_root is set.
 ct_file_name: ct.nii.gz
 # ct_root: /path/to/original/ct/cases
+
+# shapekit_tri: mask-only global numbering, component cleanup, and
+# anatomical plane refinement (choose via --vertebrae_engine).
