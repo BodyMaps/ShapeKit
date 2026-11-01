@@ -113,6 +113,17 @@ change the default engine. See [installation, input validation and regression
 instructions](docs/VERTEBRAE_HAO.md). Enable with `--vertebrae_engine shapekit_hao`
 and `--vertebrae_only`; start with `--cpu_count 1` and a new output directory.
 
+# Axis-Based Vertebra Relabelling (ShapeKit-AxisRelabel)
+
+An optional `shapekit_axis_relabel` engine fixes wrong vertebra numbers, such as half a
+body or a spinous process carrying the neighbour's label. It finds the spine axis and
+the discs from the CT and the mask, numbers the levels consecutively, and grows each
+vertebra's posterior elements from its own pedicles. It uses classic image processing
+only and runs on CPU at about 2 GB and 2 minutes per whole-spine case. Finished cases
+are published atomically, so large batches can be resumed with `--continue_prediction`.
+Enable with `--vertebrae_engine shapekit_axis_relabel --vertebrae_only`. See
+[usage, scaling and validation](docs/VERTEBRAE_AXIS_RELABEL.md).
+
 # Evidence-Gated Vertebrae Engine (ShapeKit-Pro)
 
 The default vertebrae module works from the masks alone. ShapeKit can now
