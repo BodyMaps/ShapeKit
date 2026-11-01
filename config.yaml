@@ -96,6 +96,11 @@ if_save_combined_label: True
 #                   requires matching calibrated CT and target_organs [vertebrae].
 #                   Fails on grid mismatch/missing CT; no legacy fallback.
 #                   See docs/VERTEBRAE_HAO.md for CLI overrides and regression tests.
+#   shapekit_axis_relabel - opt-in relabelling against the case CT: finds the spine axis
+#                   and the discs, numbers the levels consecutively, then assigns the
+#                   posterior elements to their own vertebra. Needs the case CT and
+#                   target_organs [vertebrae] (--vertebrae_only); keeps the input labels
+#                   when no spine can be found. See docs/VERTEBRAE_AXIS_RELABEL.md.
 #   shapekit             - default mask-based module (no CT needed)
 #   shapekit_songlin   - VerSe-inspired iterative refinement loop (no CT needed)
 #   shapekit_pro          - evidence-gated repair against the case CT: recolors
