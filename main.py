@@ -7,6 +7,7 @@ from utils.vertebrae_iterative import postprocessing_vertebrae as postprocessing
 from utils.vertebrae_pro import postprocessing_vertebrae_pro
 from utils.vertebrae_hao import process_case as process_hao_case
 from utils.vertebrae_ct_refinement import process_case as process_ct_refinement_case
+from utils.vertebrae_anchor_graph import postprocessing_vertebrae_anchor_graph, VERTEBRA_NAMES as ANCHOR_GRAPH_NAMES
 import logging
 import yaml
 import traceback
@@ -113,6 +114,7 @@ def combine_segmentation_dict(segmentation_dict: dict, class_map: dict) -> np.nd
 
 def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.array, target_organs: set, patient_id: str, logger: logging.Logger,
     ct_path: str = None,
+    report_dir: str | None = None,
 ):
     """
     Apply organ-specific post-processing functions to the segmentation dict
@@ -206,6 +208,15 @@ def process_organs(segmentation_dict: dict, reference_img, combined_seg: np.arra
                 ct_path,
                 logger=logger,
             )
+        elif vertebrae_engine == 'shapekit_anchor_graph':
+            segmentation_dict = postprocessing_vertebrae_anchor_graph(
+                patient_id,
+                segmentation_dict,
+                reference_img,
+                ct_path,
+                logger=logger,
+                report_dir=report_dir,
+            )
         elif vertebrae_engine == 'shapekit_songlin':
             segmentation_dict = postprocessing_vertebrae_songlin(
                 patient_id,
@@ -268,6 +279,7 @@ def main(input_path, input_folder_name, output_path=None):
     if not os.path.exists(ct_path) and ct_root is not None:
         ct_path = os.path.join(ct_root, input_folder_name, ct_file_name)
 
+    save_folder_path = os.path.join(output_path, input_folder_name)
     postprocessed_segmentation_dict = process_organs(
         segmentation_dict, 
         img,
@@ -276,17 +288,19 @@ def main(input_path, input_folder_name, output_path=None):
         patient_id = patient_id,
         logger = logging,
         ct_path = ct_path,
+        report_dir = save_folder_path,
     )
-    
-    save_folder_path = os.path.join(output_path, input_folder_name)
+
     os.makedirs(save_folder_path, exist_ok=True)
 
+    anchor_graph = vertebrae_engine == 'shapekit_anchor_graph' and 'vertebrae' in target_organs
     save_and_combine_segmentations(
         processed_segmentation_dict=postprocessed_segmentation_dict,
         class_map=class_map,
         reference_img=img,
         output_folder=save_folder_path,
-        if_save_combined=save_combined_label_bool
+        if_save_combined=save_combined_label_bool,
+        write_empty=set(ANCHOR_GRAPH_NAMES.values()) if anchor_graph else (),
     )
 
     del img
@@ -348,7 +362,7 @@ parser.add_argument('--csv', type=str, default=None, help='Guidence csv file tel
 parser.add_argument('--cpu_count', type=int, default=cpu_count(), help='Number of CPU cores to use for parallel processing (default: system max)')
 parser.add_argument('--continue_prediction', action="store_true", help='If continue from last processing record')
 parser.add_argument('--tqdm_ncols', type=int, default=100, help='Width of tqdm progress bar in characters')
-parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_ct_refinement'],
+parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_ct_refinement', 'shapekit_anchor_graph'],
                     help='Override config.yaml vertebrae engine for this run')
 parser.add_argument('--vertebrae_only', action='store_true', help='Process vertebrae only')
 parser.add_argument('--ct_root', help='Override external case CT root for this run')

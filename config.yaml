@@ -96,6 +96,11 @@ if_save_combined_label: True
 #                   requires matching calibrated CT and target_organs [vertebrae].
 #                   Fails on grid mismatch/missing CT; no legacy fallback.
 #                   See docs/VERTEBRAE_HAO.md for CLI overrides and regression tests.
+#   shapekit_anchor_graph - order-checked anchors + contact-graph relabelling, split-bone
+#                   merge, hole fill; uses the case CT (same grid) for disc-based
+#                   renumbering and surface refinement when found, else mask-only.
+#                   Writes vertebrae_anchor_graph_report.json per case.
+#                   See docs/VERTEBRAE_ANCHOR_GRAPH.md.
 #   shapekit             - default mask-based module (no CT needed)
 #   shapekit_songlin   - VerSe-inspired iterative refinement loop (no CT needed)
 #   shapekit_pro          - evidence-gated repair against the case CT: recolors

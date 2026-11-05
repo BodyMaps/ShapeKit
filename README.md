@@ -154,6 +154,17 @@ size, emptiness; exactly 24 components), the collapsed L1 is restored from
 23.3 to 62.9 cm3 at detected disc planes, and every spinous process is
 re-attached to its own vertebra on the fused case.
 
+# Anchor-Graph Vertebrae Engine (ShapeKit-AnchorGraph)
+
+An optional `shapekit_anchor_graph` engine checks the anatomical order of each
+vertebra's main body, relabels fragments by the surface they share with the
+spine, merges bones split across two labels and fills holes. When the case CT
+is on the same grid it also counts bones from the discs to renumber shifted
+labels and refines the bone surface; otherwise it runs from the masks alone.
+Every change and flag is written to a per-case JSON report. Enable with
+`--vertebrae_engine shapekit_anchor_graph`; see
+[docs/VERTEBRAE_ANCHOR_GRAPH.md](docs/VERTEBRAE_ANCHOR_GRAPH.md).
+
 # Iterative Vertebrae Engine (ShapeKit-Iterative)
 
 In addition to the default and Pro vertebrae engines, ShapeKit now offers a
