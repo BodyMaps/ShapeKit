@@ -1,3 +1,5 @@
+from collections.abc import Collection
+
 import numpy as np
 import nibabel as nib
 import os
@@ -618,7 +620,8 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
                                    reference_img: nib.Nifti1Image,
                                    output_folder: str,
                                    if_save_combined: False,
-                                   combined_filename: str = "combined_labels.nii.gz"):
+                                   combined_filename: str = "combined_labels.nii.gz",
+                                   write_empty: Collection[str] = ()):
     """
     Saves all organ masks in a folder and combines them into a single label volume.
 
@@ -636,7 +639,8 @@ def save_and_combine_segmentations(processed_segmentation_dict: dict,
     # Save each organ mask individually and discard from memory
     for idx, organ in sorted(class_map.items()):
         mask = processed_segmentation_dict.pop(organ, None)
-        if mask is None or not mask.any():
+        # organs in write_empty are saved even when empty, overwriting the raw copy main() placed there
+        if mask is None or (not mask.any() and organ not in write_empty):
             continue
 
         mask = mask.astype(np.uint8, copy=False)
