@@ -5,6 +5,7 @@ scipy==1.15.3
 nibabel==5.4.2
 scikit-image==0.25.2
 connected-components-3d
+fastremap
 tqdm
 matplotlib
 PyYAML
