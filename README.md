@@ -103,6 +103,33 @@ target_organs: (example)
 
 Before running any commands, please ensure that `config.yaml` is properly configured. But don't worry! **Most of the configurations do not need to be changed at all.**
 </details>
+# Vertebrae Warm-up Post-processing
+
+ShapeKit exposes the vertebrae warm-up workflow through the optional `shapekit_warmup` engine. Run these examples from the repository root. Replace the example paths with your own paths and use a fresh output directory.
+
+**Components mode** removes disconnected fragments from the predicted C1 mask. Set --input_folder to the directory containing the case folders. Each case folder contains the predicted vertebra masks.
+
+```bash
+python main.py --input_folder /path/to/predictions \
+  --output_folder /path/to/components-results \
+  --vertebrae_engine shapekit_warmup --vertebrae_only \
+  --warmup-mode components --case BDMAP_00000006 --cpu_count 1
+```
+
+**Rooted mode** uses the original CT and a matching SuPreM probability cache to refine vertebra labels. The CT root contains `<case>/ct.nii.gz`, and the cache root contains `<case>.pt`. This mode reuses cached predictions.
+
+```bash
+python main.py --input_folder /path/to/predictions \
+  --output_folder /path/to/rooted-results \
+  --vertebrae_engine shapekit_warmup --vertebrae_only \
+  --warmup-mode rooted --case BDMAP_00000031 --cpu_count 1 \
+  --ct_root /path/to/ct-cases \
+  --warmup-cache-root /path/to/probability-caches \
+  --warmup-suprem-repo /path/to/SuPreM/direct_inference \
+  --warmup-python /path/to/suprem/python
+```
+
+Each run writes a combined label map, individual vertebra masks, and a JSON report. On the two example cases above, all 24 vertebra masks per case matched the original standalone workflow voxel for voxel. This comparison verified output consistency on those two cases.
 
 # Native-Grid Two-Stage Vertebrae Engine (ShapeKit-Hao)
 
