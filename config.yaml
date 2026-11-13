@@ -96,6 +96,10 @@ if_save_combined_label: True
 #                   requires matching calibrated CT and target_organs [vertebrae].
 #                   Fails on grid mismatch/missing CT; no legacy fallback.
 #                   See docs/VERTEBRAE_HAO.md for CLI overrides and regression tests.
+#   shapekit_driftfix    - opt-in five-stage cleanup of 24 vertebra masks; CT optional
+#                   (mask-only path if missing); requires target_organs [vertebrae].
+#                   vertebrae_driftfix_relabel (below) turns on the level-changing repairs.
+#                   See docs/VERTEBRAE_DRIFTFIX.md.
 #   shapekit             - default mask-based module (no CT needed)
 #   shapekit_songlin   - VerSe-inspired iterative refinement loop (no CT needed)
 #   shapekit_pro          - evidence-gated repair against the case CT: recolors
@@ -109,3 +113,6 @@ vertebrae_engine: shapekit_songlin # use iterative refinement as default option 
 # <ct_root>/<case_id>/<ct_file_name> when ct_root is set.
 ct_file_name: ct.nii.gz
 # ct_root: /path/to/original/ct/cases
+
+# shapekit_driftfix only: false (default) skips the stages that can change a vertebra's level.
+vertebrae_driftfix_relabel: false
