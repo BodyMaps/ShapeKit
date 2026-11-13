@@ -113,6 +113,16 @@ change the default engine. See [installation, input validation and regression
 instructions](docs/VERTEBRAE_HAO.md). Enable with `--vertebrae_engine shapekit_hao`
 and `--vertebrae_only`; start with `--cpu_count 1` and a new output directory.
 
+# Drift-Fix Vertebrae Engine (ShapeKit-Driftfix)
+
+An optional `shapekit_driftfix` backend cleans up the 24 vertebra masks in five stages (specks and
+far debris, detached fragments, label drift at the discs, a lost-level repair, and an order check that
+only flags). The CT is optional; without it the engine runs mask-only and says so in its report. It does
+not change the default engine. By default the two stages that can change a vertebra's level are off
+(`vertebrae_driftfix_relabel: false`) because they can hurt spines with an L6 or T13. See
+[usage, options and known limits](docs/VERTEBRAE_DRIFTFIX.md). Enable with
+`--vertebrae_engine shapekit_driftfix` and `--vertebrae_only`, with a new output directory.
+
 # Evidence-Gated Vertebrae Engine (ShapeKit-Pro)
 
 The default vertebrae module works from the masks alone. ShapeKit can now
