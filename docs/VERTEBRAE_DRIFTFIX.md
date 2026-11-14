@@ -64,15 +64,16 @@ python main.py \
 One option, in `config.yaml`:
 
 ```yaml
-vertebrae_driftfix_relabel: false   # default
+vertebrae_driftfix_relabel: true   # default
 ```
 
-- `false` (default, the safe choice): stages 3 and 4, the two that can change which level a voxel belongs to,
-  are skipped. This is the script's `--no_relabel`. Clean-up and the order check still run.
-- `true`: all five stages run.
+- `true` (default): all five stages run. This is the configuration behind every held-out number on this page.
+- `false`: stages 3 and 4, the two that can change which level a voxel belongs to, are skipped. This is the
+  script's `--no_relabel`. Clean-up and the order check still run. It has no held-out numbers of its own.
 
-Why false is the default: on spines with an extra vertebra (L6 or T13) the lost-level repair can move many
-vertebrae to the wrong level (see Known limits). From Python you can also pass `relabel=True` or `False`
+When to use false: on spines with an extra vertebra (L6 or T13) the lost-level repair can move many
+vertebrae to the wrong level (see Known limits). If your data may contain such spines and nobody reviews
+the flags, false is the safer setting. From Python you can also pass `relabel=True` or `False`
 to `process_case`.
 
 ## Output

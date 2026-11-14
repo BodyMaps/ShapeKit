@@ -32,13 +32,13 @@ def engine_to_shapekit(label):
 
 
 def relabel_from_config(path='config.yaml'):
-    """Read the optional config key ``vertebrae_driftfix_relabel``. Default False (the safe choice)."""
+    """Read the optional config key ``vertebrae_driftfix_relabel``. Default True (the configuration that was scored on held-out scans)."""
     try:
         import yaml
         with open(path, 'r') as f:
-            return bool((yaml.safe_load(f) or {}).get('vertebrae_driftfix_relabel', False))
+            return bool((yaml.safe_load(f) or {}).get('vertebrae_driftfix_relabel', True))
     except OSError:
-        return False
+        return True
 
 
 def check_grid(image, reference, name):
@@ -103,7 +103,7 @@ def process_case(input_path, output_path, ct_path, class_map, subfolder_name='se
 
     relabel: True runs all five stages. False skips the two stages that can change which level a voxel
     belongs to (label drift and lost level), like the script's ``--no_relabel``. None (default) reads the
-    config key ``vertebrae_driftfix_relabel``, which is False when absent.
+    config key ``vertebrae_driftfix_relabel``, which is True when absent.
     A missing CT is allowed: the engine then runs its mask-only path and the report says so.
     """
     started = time.monotonic()

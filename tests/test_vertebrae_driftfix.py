@@ -177,13 +177,13 @@ class AdapterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             process_case(self.source, self.root / 'output', self.ct, bad, relabel=False)
 
-    def test_relabel_default_is_off(self):
-        self.assertFalse(adapter.relabel_from_config(str(self.root / 'no_such_config.yaml')))
+    def test_relabel_default_is_on(self):
+        self.assertTrue(adapter.relabel_from_config(str(self.root / 'no_such_config.yaml')))
         cfg = self.root / 'c.yaml'
-        cfg.write_text('vertebrae_driftfix_relabel: true\n')
-        self.assertTrue(adapter.relabel_from_config(str(cfg)))
-        cfg.write_text('other: 1\n')
+        cfg.write_text('vertebrae_driftfix_relabel: false\n')
         self.assertFalse(adapter.relabel_from_config(str(cfg)))
+        cfg.write_text('other: 1\n')
+        self.assertTrue(adapter.relabel_from_config(str(cfg)))
 
 
 @unittest.skipUnless((DEMO / 'input' / 'BDMAP_00000006' / 'segmentations').is_dir()
