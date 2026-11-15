@@ -67,6 +67,8 @@ One option, in `config.yaml`:
 vertebrae_driftfix_relabel: true   # default
 ```
 
+- The key is read from `config.yaml` in the current working directory, like the rest of ShapeKit's settings. If the
+  file is not found there, the default (`true`) is used.
 - `true` (default): all five stages run. This is the configuration behind every held-out number on this page.
 - `false`: stages 3 and 4, the two that can change which level a voxel belongs to, are skipped. This is the
   script's `--no_relabel`. Clean-up and the order check still run. It has no held-out numbers of its own.
@@ -89,13 +91,15 @@ to `process_case`.
 
 ## Runtime and memory
 
-Measured on a Windows laptop with 8 GB RAM, one worker, on the cropped demo case BDMAP_00000006
+Measured on an 8 GB Windows laptop, one worker, on the cropped demo case BDMAP_00000006
 (278 x 322 x 290 voxels): about 25 s inside the adapter, about 28 s through `main.py`.
 The author's notes record about 5 s for the full case 06 and about 30 s for the large case 31 on a larger
-machine, and a median of 1.6 s per case (maximum 19 s) on a cloud CPU. Peak memory was not measured.
+machine, and a median of 1.6 s per case (maximum 19 s) on a cloud CPU. Those times are for the standalone script on
+one combined label file. Through ShapeKit the median was 14 s per scan in the benchmark below, because the adapter also
+reads and writes the 24 per-level mask files. Peak memory was not measured.
 The adapter holds the 24 masks as one uint8 volume and the engine works on a crop around the spine, so memory is
 roughly a few copies of the full uint8 volume plus the CT as int16. Large 0.7 mm whole-spine scans were not
-run on this laptop.
+run.
 
 ## Known limits
 
@@ -113,7 +117,7 @@ The write-up (`REPORT.md`, `eval/heldout2_results.md`) is in the author's own pr
 - On the two demo cases there is no ground truth. Checks there are about consistency (volumes, pieces, order),
   not accuracy.
 - On one scan a 21-voxel edge piece of a vertebra was removed as a speck, which took that level's Dice to 0.
-- Not tested: large 0.7 mm scans on this laptop; Python versions other than 3.13.
+- Not tested: large 0.7 mm scans; Python versions other than 3.13 locally (the benchmark ran on Kaggle's Python).
 
 ## Validation done for this integration
 
@@ -121,7 +125,7 @@ The write-up (`REPORT.md`, `eval/heldout2_results.md`) is in the author's own pr
   grid mismatch, overlap, non-binary, and voxel-for-voxel equality with the engine run directly, on the
   phantom and on a cropped demo case (that test is skipped if `data/shapekit_demo` is not present).
 - BDMAP_00000006 (cropped) through `main.py`: 794 voxels changed, 1 review flag. BDMAP_00000031 was not run
-  on this machine.
+  (too large for the 8 GB laptop).
 
 These checks show the integration reproduces the standalone script. They are not an accuracy test.
 
