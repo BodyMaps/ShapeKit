@@ -127,9 +127,34 @@ These checks show the integration reproduces the standalone script. They are not
 
 ## Benchmark against other engines
 
-> **PLACEHOLDER. To be filled in later. No numbers have been measured for this table yet.**
+70 CT scans from TotalSegmentator v3.0.0 with public vertebra masks, none of them in SuPreM's training, validation or
+test lists. Input to every engine: the raw SuPreM vertebra prediction (default inference command). Each engine was run
+through `main.py` at upstream commit `ddfa8d9` on a Kaggle CPU machine (4 vCPU), then scored against the public masks.
+Dice is the mean over the vertebrae present in the ground truth, averaged over scans. The interval is a 95% paired
+bootstrap over scans (engine minus raw).
 
-| engine | identification rate | mean Dice | whole-spine Dice | HD95 (mm) | time | peak RAM |
-|---|---|---|---|---|---|---|
-| shapekit_driftfix | TBD | TBD | TBD | TBD | TBD | TBD |
-| other engines | TBD | TBD | TBD | TBD | TBD | TBD |
+| engine | scans done | mean Dice | change vs raw [95% interval] | scans better / same / worse | level-identity rate | scans under 0.7 Dice | order violations | median s/scan |
+|---|---|---|---|---|---|---|---|---|
+| raw SuPreM | 70 | 0.8805 | - | - | 0.938 | 7 | 964 | - |
+| shapekit | 70 / 70 | 0.8769 | -0.0036 [-0.0111, +0.0032] | 48 / 0 / 22 | 0.931 | 9 | 970 | 105 |
+| shapekit_songlin | 70 / 70 | 0.8460 | -0.0345 [-0.0603, -0.0124] | 47 / 0 / 23 | 0.894 | 13 | 983 | 296 |
+| shapekit_hao | 70 / 70 | 0.8809 | +0.0004 [-0.0016, +0.0023] | 55 / 0 / 15 | 0.942 | 7 | 957 | 28 |
+| shapekit_ct_refinement | 70 / 70 | 0.8905 | +0.0100 [+0.0038, +0.0175] | 39 / 30 / 1 | 0.940 | 7 | 962 | 22 |
+| shapekit_driftfix | 70 / 70 | 0.8892 | +0.0087 [+0.0017, +0.0176] | 59 / 2 / 9 | 0.944 | 6 | 287 | 14 |
+| shapekit_pro (first 10 scans only) | 4 / 10 | 0.8561 (raw 0.8557 on the same 4) | +0.0005 [-0.0213, +0.0215] | 2 / 0 / 2 | 0.902 (raw 0.958) | 0 | 30 (raw 40) | 27 |
+
+How to read it:
+
+- `shapekit_ct_refinement` has the highest mean Dice and makes almost no scan worse (1 of 70). This engine is second
+  on Dice and makes 9 scans worse. The two intervals overlap, so the Dice order between them is not settled.
+- This engine is the only one that removes most order violations (964 to 287). The others leave them almost unchanged.
+- `shapekit_songlin` lowers Dice on this set, mostly through a few scans that get much worse (13 scans under 0.7).
+- `shapekit_pro` was run on the first 10 scans by case id because of its documented run time. It crashed on 6 of them
+  with `IndexError` at `utils/vertebrae_pro_engine.py:815` (`s_axis[c]` with `c` equal to the array length, when a band
+  reaches the top of the cropped spine). Four scans are too few to rank it.
+- The `shapekit_driftfix` output equals the standalone script's output voxel for voxel on all 70 scans.
+
+Limits of this benchmark: one dataset, one segmentation model, 1.5 mm scans, and no scan with a sixth lumbar or a
+thirteenth thoracic vertebra (on 10 such scans this engine lowers Dice, see "Known limits"). These 70 scans were scored
+once before with the standalone script, after it was frozen; no engine was tuned on them. Peak memory was not measured.
+Kernel scripts, logs and the scorer are available on request.
