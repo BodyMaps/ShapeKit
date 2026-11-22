@@ -210,3 +210,9 @@ Please check the details in [functions guide book 📖.](docs/functions.md)
 # Acknowledgement
 
 This work was supported by the Lustgarten Foundation for Pancreatic Cancer Research, the Patrick J. McGovern Foundation Award, and the National Institutes of Health (NIH) under Award Number R01EB037669. We would like to thank the Johns Hopkins Research IT team in [IT@JH](https://researchit.jhu.edu/) for their support and infrastructure resources where some of these analyses were conducted; especially [DISCOVERY HPC](https://researchit.jhu.edu/research-hpc/). Paper content is covered by patents pending.
+
+# Vertebra warm-up
+
+Use the [ordered-core engine](docs/ORDERED_CORE.md) to run the warm-up on raw
+SuPreM masks, or [import refined masks](docs/IMPORT_VERTEBRAE.md) if you've
+already run it.

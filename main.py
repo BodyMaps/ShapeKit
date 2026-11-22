@@ -345,14 +345,16 @@ parser.add_argument('--input_folder', type=str, help='Input files folder locatio
 parser.add_argument('--output_folder', type=str, help='Output files folder location, /path/to/save/results')
 parser.add_argument('--log_folder', type=str, default='./logs/task_001', help='Logging folder location')
 parser.add_argument('--csv', type=str, default=None, help='Guidence csv file telling ShapeKit specific ones for processing')
-parser.add_argument('--cpu_count', type=int, default=cpu_count(), help='Number of CPU cores to use for parallel processing (default: system max)')
+parser.add_argument('--cpu_count', type=int,
+                    help='Worker limit (ordered-core defaults to 1; other engines use the system limit)')
 parser.add_argument('--continue_prediction', action="store_true", help='If continue from last processing record')
 parser.add_argument('--tqdm_ncols', type=int, default=100, help='Width of tqdm progress bar in characters')
-parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_ct_refinement'],
+parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_ct_refinement', 'shapekit_ordered_core'],
                     help='Override config.yaml vertebrae engine for this run')
 parser.add_argument('--vertebrae_only', action='store_true', help='Process vertebrae only')
 parser.add_argument('--ct_root', help='Override external case CT root for this run')
 parser.add_argument('--case', action='append', help='Process only this case folder (repeatable)')
+parser.add_argument('--ordered_core_source', help='Trusted local independent ordered-core Python source')
 args = parser.parse_args()
 if args.vertebrae_engine is not None:
     vertebrae_engine = args.vertebrae_engine
@@ -395,7 +397,7 @@ if __name__ == '__main__':
 
     if input_folder is None or output_folder is None:
         parser.error('--input_folder and --output_folder are required')
-    if args.cpu_count < 1:
+    if args.cpu_count is not None and args.cpu_count < 1:
         parser.error('--cpu_count must be at least 1')
     if vertebrae_engine in ('shapekit_hao', 'shapekit_ct_refinement'):
         if target_organs != {'vertebrae'}:
@@ -430,6 +432,27 @@ if __name__ == '__main__':
         print(f"[INFO] CSV filtering enabled: {after}/{before} cases kept")
 
 
+    if vertebrae_engine == 'shapekit_ordered_core':
+        from pathlib import Path
+        from tools.run_ordered_core import run_batch
+        if target_organs != {'vertebrae'} or subfolder_name != 'segmentations':
+            parser.error('shapekit_ordered_core requires --vertebrae_only and segmentations layout')
+        if not save_combined_label_bool:
+            parser.error('shapekit_ordered_core requires if_save_combined_label: true')
+        if not args.ordered_core_source or not Path(args.ordered_core_source).is_file():
+            parser.error('shapekit_ordered_core requires --ordered_core_source pointing to local Python code')
+        if not sub_folders:
+            parser.error('No cases selected')
+        try:
+            failed = run_batch(sub_folders, input_folder, output_folder,
+                               args.ordered_core_source, class_map, ct_root=ct_root,
+                               ct_filename=ct_file_name, resume=args.continue_prediction,
+                               workers=min(args.cpu_count or 1, cpu_count()),
+                               event_log=Path(args.log_folder) / 'ordered_core.jsonl')
+        except ValueError as error:
+            parser.error(str(error))
+        raise SystemExit(bool(failed))
+
     if args.continue_prediction:
         continue_cases = set(
             check_unprocessed_cases(
@@ -447,7 +470,7 @@ if __name__ == '__main__':
 
     if not sub_folders:
         parser.error('No cases selected')
-    max_workers = min(args.cpu_count, len(sub_folders), max(1, multiprocessing.cpu_count() - 1))
+    max_workers = min(args.cpu_count or cpu_count(), len(sub_folders), max(1, multiprocessing.cpu_count() - 1))
     print(f"[INFO] Starting... with {max_workers} multiprocess ...")
     print(f"[INFO] Input files dir: {input_folder}")
     print(f"[INFO] Output files dir: {output_folder}")
