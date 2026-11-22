@@ -61,6 +61,59 @@ def disjoint(a, b):
     return a != b and a not in b.parents and b not in a.parents
 
 
+def validate_source(source, mask_paths, target_ids, label_offset, ct_path):
+    """Read and validate source masks. Return the remapped data and empty levels."""
+    combined_path = source / "combined_labels.nii.gz"
+    reference = nib.load(combined_path)
+    check_grid(reference, reference, combined_path.name)
+    raw = np.asanyarray(reference.dataobj)
+    if raw.dtype.kind not in "ui" or not set(np.unique(raw)) <= {
+        0,
+        *range(1 + label_offset, 25 + label_offset),
+    }:
+        raise ValueError(
+            "E_LABELS: expected integer vertebra-only source IDs for the declared offset"
+        )
+    if ct_path is not None:
+        check_grid(nib.load(ct_path), reference, str(ct_path))
+    lookup = np.zeros(50, np.uint16)
+    for i, name in enumerate(NAMES, 1 + label_offset):
+        lookup[i] = target_ids[name]
+    combined = lookup[raw]
+    del raw
+    missing = []
+    for name in NAMES:
+        if not (source / "segmentations" / f"{name}.nii.gz").is_file():
+            if np.any(combined == target_ids[name]):
+                raise ValueError(
+                    f"E_MISSING: populated class has no binary mask: {name}"
+                )
+            missing.append(name)
+    for path in mask_paths:
+        name = path.name[:-7]
+        if name not in target_ids:
+            raise ValueError(f"E_MAPPING: unknown mask {name}")
+        image = nib.load(path)
+        check_grid(image, reference, path.name)
+        data = np.asanyarray(image.dataobj)
+        if not np.all((data == 0) | (data == 1)):
+            raise ValueError(f"E_BINARY: {name}")
+        mask = data > 0
+        if name in NAMES:
+            if not np.array_equal(mask, combined == target_ids[name]):
+                raise ValueError(
+                    f"E_CONSISTENCY: binary/combined mismatch or overlap: {name}"
+                )
+        else:
+            if np.any(mask & (combined != 0)):
+                raise ValueError(
+                    f"E_OVERLAP: unrelated mask overlaps another class: {name}"
+                )
+            combined[mask] = target_ids[name]
+
+    return reference, combined, missing
+
+
 def import_case(
     source, output, class_map, *, label_offset=0, ct_path=None, resume=False
 ):
@@ -133,52 +186,9 @@ def import_case(
             "runtime_seconds": time.perf_counter() - started,
         }
 
-    reference = nib.load(combined_path)
-    check_grid(reference, reference, combined_path.name)
-    raw = np.asanyarray(reference.dataobj)
-    if raw.dtype.kind not in "ui" or not set(np.unique(raw)) <= {
-        0,
-        *range(1 + label_offset, 25 + label_offset),
-    }:
-        raise ValueError(
-            "E_LABELS: expected integer vertebra-only source IDs for the declared offset"
-        )
-    if ct_path is not None:
-        check_grid(nib.load(ct_path), reference, str(ct_path))
-    lookup = np.zeros(50, np.uint16)
-    for i, name in enumerate(NAMES, 1 + label_offset):
-        lookup[i] = target_ids[name]
-    combined = lookup[raw]
-    del raw
-    missing = []
-    for name in NAMES:
-        if not (source / "segmentations" / f"{name}.nii.gz").is_file():
-            if np.any(combined == target_ids[name]):
-                raise ValueError(
-                    f"E_MISSING: populated class has no binary mask: {name}"
-                )
-            missing.append(name)
-    for path in mask_paths:
-        name = path.name[:-7]
-        if name not in target_ids:
-            raise ValueError(f"E_MAPPING: unknown mask {name}")
-        image = nib.load(path)
-        check_grid(image, reference, path.name)
-        data = np.asanyarray(image.dataobj)
-        if not np.all((data == 0) | (data == 1)):
-            raise ValueError(f"E_BINARY: {name}")
-        mask = data > 0
-        if name in NAMES:
-            if not np.array_equal(mask, combined == target_ids[name]):
-                raise ValueError(
-                    f"E_CONSISTENCY: binary/combined mismatch or overlap: {name}"
-                )
-        else:
-            if np.any(mask & (combined != 0)):
-                raise ValueError(
-                    f"E_OVERLAP: unrelated mask overlaps another class: {name}"
-                )
-            combined[mask] = target_ids[name]
+    reference, combined, missing = validate_source(
+        source, mask_paths, target_ids, label_offset, ct_path
+    )
 
     output.parent.mkdir(parents=True, exist_ok=True)
     incomplete = output.parent / ".incomplete"

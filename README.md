@@ -215,3 +215,8 @@ This work was supported by the Lustgarten Foundation for Pancreatic Cancer Resea
 For a standalone refinement that must retain its existing binary predictions,
 use the opt-in [validated import tool](docs/IMPORT_VERTEBRAE.md). It exports the
 configured ShapeKit combined IDs without running a second refinement engine.
+
+For raw SuPreM outputs, the opt-in
+[ordered-core engine](docs/ORDERED_CORE.md) executes a trusted local copy of the
+independent warm-up code and exports validated results from the normal ShapeKit
+CLI.

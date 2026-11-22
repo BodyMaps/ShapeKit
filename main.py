@@ -348,11 +348,12 @@ parser.add_argument('--csv', type=str, default=None, help='Guidence csv file tel
 parser.add_argument('--cpu_count', type=int, default=cpu_count(), help='Number of CPU cores to use for parallel processing (default: system max)')
 parser.add_argument('--continue_prediction', action="store_true", help='If continue from last processing record')
 parser.add_argument('--tqdm_ncols', type=int, default=100, help='Width of tqdm progress bar in characters')
-parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_ct_refinement'],
+parser.add_argument('--vertebrae_engine', choices=['shapekit', 'shapekit_songlin', 'shapekit_pro', 'shapekit_hao', 'shapekit_ct_refinement', 'shapekit_ordered_core'],
                     help='Override config.yaml vertebrae engine for this run')
 parser.add_argument('--vertebrae_only', action='store_true', help='Process vertebrae only')
 parser.add_argument('--ct_root', help='Override external case CT root for this run')
 parser.add_argument('--case', action='append', help='Process only this case folder (repeatable)')
+parser.add_argument('--ordered_core_source', help='Trusted local independent ordered-core Python source')
 args = parser.parse_args()
 if args.vertebrae_engine is not None:
     vertebrae_engine = args.vertebrae_engine
@@ -429,6 +430,23 @@ if __name__ == '__main__':
         after = len(sub_folders)
         print(f"[INFO] CSV filtering enabled: {after}/{before} cases kept")
 
+
+    if vertebrae_engine == 'shapekit_ordered_core':
+        from pathlib import Path
+        from tools.run_ordered_core import run_batch
+        if target_organs != {'vertebrae'} or subfolder_name != 'segmentations':
+            parser.error('shapekit_ordered_core requires --vertebrae_only and segmentations layout')
+        if not args.ordered_core_source or not Path(args.ordered_core_source).is_file():
+            parser.error('shapekit_ordered_core requires --ordered_core_source pointing to local Python code')
+        if not sub_folders:
+            parser.error('No cases selected')
+        try:
+            failed = run_batch(sub_folders, input_folder, output_folder,
+                               args.ordered_core_source, class_map, ct_root=ct_root,
+                               ct_filename=ct_file_name, resume=args.continue_prediction)
+        except ValueError as error:
+            parser.error(str(error))
+        raise SystemExit(bool(failed))
 
     if args.continue_prediction:
         continue_cases = set(
