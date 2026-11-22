@@ -210,13 +210,9 @@ Please check the details in [functions guide book 📖.](docs/functions.md)
 # Acknowledgement
 
 This work was supported by the Lustgarten Foundation for Pancreatic Cancer Research, the Patrick J. McGovern Foundation Award, and the National Institutes of Health (NIH) under Award Number R01EB037669. We would like to thank the Johns Hopkins Research IT team in [IT@JH](https://researchit.jhu.edu/) for their support and infrastructure resources where some of these analyses were conducted; especially [DISCOVERY HPC](https://researchit.jhu.edu/research-hpc/). Paper content is covered by patents pending.
-# Importing standalone vertebra results
 
-For a standalone refinement that must retain its existing binary predictions,
-use the opt-in [validated import tool](docs/IMPORT_VERTEBRAE.md). It exports the
-configured ShapeKit combined IDs without running a second refinement engine.
+# Vertebra warm-up
 
-For raw SuPreM outputs, the opt-in
-[ordered-core engine](docs/ORDERED_CORE.md) executes a trusted local copy of the
-independent warm-up code and exports validated results from the normal ShapeKit
-CLI.
+Use the [ordered-core engine](docs/ORDERED_CORE.md) to run the warm-up on raw
+SuPreM masks, or [import refined masks](docs/IMPORT_VERTEBRAE.md) if you've
+already run it.
