@@ -61,6 +61,22 @@ def disjoint(a, b):
     return a != b and a not in b.parents and b not in a.parents
 
 
+def validate_class_map(class_map):
+    if (
+        not class_map
+        or any(type(i) is not int or not 1 <= i <= 65535 for i in class_map)
+        or any(not isinstance(name, str) for name in class_map.values())
+        or len(set(class_map.values())) != len(class_map)
+    ):
+        raise ValueError(
+            "E_MAPPING: unique names and positive uint16 class IDs required"
+        )
+    target_ids = {name: i for i, name in class_map.items()}
+    if not set(NAMES) <= set(target_ids):
+        raise ValueError("E_MAPPING: class_map must include all 24 vertebra names")
+    return target_ids
+
+
 def validate_source(source, mask_paths, target_ids, label_offset, ct_path):
     """Read and validate source masks. Return the remapped data and empty levels."""
     combined_path = source / "combined_labels.nii.gz"
@@ -129,18 +145,7 @@ def import_case(
         raise ValueError("E_PATH: input and output must be disjoint")
     if label_offset not in (0, 25):
         raise ValueError("E_MAPPING: label_offset must be 0 (SuPreM) or 25 (ShapeKit)")
-    if (
-        not class_map
-        or any(type(i) is not int or not 1 <= i <= 65535 for i in class_map)
-        or any(not isinstance(name, str) for name in class_map.values())
-        or len(set(class_map.values())) != len(class_map)
-    ):
-        raise ValueError(
-            "E_MAPPING: unique names and positive uint16 class IDs required"
-        )
-    target_ids = {name: i for i, name in class_map.items()}
-    if not set(NAMES) <= set(target_ids):
-        raise ValueError("E_MAPPING: class_map must include all 24 vertebra names")
+    target_ids = validate_class_map(class_map)
     if ct_path is not None:
         ct_path = Path(ct_path).resolve()
         if not disjoint(output, ct_path):

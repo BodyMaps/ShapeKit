@@ -1,5 +1,6 @@
 """Exercise the adapter and real CLI with tiny independent source fixtures."""
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -7,6 +8,8 @@ from pathlib import Path
 import nibabel as nib
 import numpy as np
 import pytest
+
+from tools.import_vertebrae import NAMES
 from tools.run_ordered_core import run_case
 
 ALGORITHM = """
@@ -23,8 +26,6 @@ def process_case_cleanup(case, out, mapping):
 def save_like(ref, data, path, dtype):
     save(np.asarray(data, dtype=dtype), ref, path)
 """
-from tools.import_vertebrae import NAMES
-
 CLASS_MAP = {i: name for i, name in enumerate(NAMES, 26)}
 REPO = Path(__file__).resolve().parents[1]
 
@@ -142,3 +143,160 @@ def test_resume_rejects_changed_sources_and_outputs(batch, changed):
     target.write_bytes(target.read_bytes() + b"\n")
     with pytest.raises(ValueError, match="E_RESUME"):
         run_case(case, output, impl, CLASS_MAP, resume=True)
+
+
+def test_parallel_cli_isolates_case_failure_and_resumes(batch, tmp_path):
+    source, output, impl = batch
+    for name in ("case_a", "case_z", "case_failed"):
+        make_case(source, name)
+    make_case(source, "case_excluded", label=99)
+    selection = tmp_path / "case selection.csv"
+    selection.write_text(
+        "Inference ID\ncase_a\ncase_failed\ncase_z\n", encoding="utf-8"
+    )
+    marker = source / "case_failed/inject_failure"
+    marker.touch()
+    impl.write_text(
+        ALGORITHM
+        + """
+_cleanup = process_case_cleanup
+def process_case_cleanup(case, out, mapping):
+    result = _cleanup(case, out, mapping)
+    if (case / "inject_failure").exists():
+        raise TypeError("injected failure after writing intermediate output")
+    return result
+""",
+        encoding="utf-8",
+    )
+    log = tmp_path / "logs with spaces"
+    cmd = [
+        sys.executable,
+        "main.py",
+        "--input_folder",
+        str(source),
+        "--output_folder",
+        str(output),
+        "--log_folder",
+        str(log),
+        "--vertebrae_only",
+        "--vertebrae_engine",
+        "shapekit_ordered_core",
+        "--ordered_core_source",
+        str(impl),
+        "--cpu_count",
+        "2",
+        "--csv",
+        str(selection),
+    ]
+    first = subprocess.run(
+        cmd, cwd=REPO, capture_output=True, text=True, timeout=60, check=False
+    )
+    assert first.returncode == 1, first.stderr or first.stdout
+    events = [
+        json.loads(x) for x in (log / "ordered_core.jsonl").read_text().splitlines()
+    ]
+    assert events[0]["workers"] == 2
+    assert {e["case"] for e in events if e["status"] == "complete"} == {
+        "case_a",
+        "case_z",
+    }
+    failure = next(e for e in events if e["status"] == "failed")
+    assert (failure["case"], failure["error_type"]) == ("case_failed", "TypeError")
+    assert not (output / "case_failed").exists()
+    assert not (output / "case_excluded").exists()
+    marker.unlink()
+    subprocess.run([*cmd, "--continue_prediction"], cwd=REPO, check=True, timeout=60)
+    last = [
+        json.loads(x) for x in (log / "ordered_core.jsonl").read_text().splitlines()
+    ][-3:]
+    assert {e["case"] for e in last if e["resumed"]} == {"case_a", "case_z"}
+    assert all(
+        (output / x / "workflow_report.json").is_file()
+        for x in ("case_a", "case_z", "case_failed")
+    )
+
+
+def test_reject_refined_grid_changed_without_ct(batch):
+    source, output, impl = batch
+    case, _, _ = make_case(source, "drift")
+    impl.write_text(
+        ALGORITHM
+        + """
+import nibabel as nib
+_cleanup = process_case_cleanup
+def process_case_cleanup(case, out, mapping):
+    result = _cleanup(case, out, mapping)
+    for p in (out / case.name).rglob("*.nii.gz"):
+        img = nib.load(p)
+        data = np.array(img.dataobj)
+        affine = img.affine.copy()
+        affine[0, 3] += 10
+        nib.save(nib.Nifti1Image(data, affine), p)
+    return result
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="E_GEOMETRY"):
+        run_case(case, output, impl, CLASS_MAP)
+    assert not output.exists()
+
+
+def test_cli_recovers_after_abrupt_exit_during_case(batch, tmp_path):
+    source, output, impl = batch
+    make_case(source, "case_a")
+    make_case(source, "case_z")
+    impl.write_text(
+        ALGORITHM
+        + """
+import os
+_cleanup = process_case_cleanup
+def process_case_cleanup(case, out, mapping):
+    result = _cleanup(case, out, mapping)
+    if case.name == "case_z" and (case / "interrupt").exists():
+        os._exit(23)
+    return result
+""",
+        encoding="utf-8",
+    )
+    marker = source / "case_z/interrupt"
+    marker.touch()
+    log = tmp_path / "interrupt logs"
+    cmd = [
+        sys.executable,
+        "main.py",
+        "--input_folder",
+        str(source),
+        "--output_folder",
+        str(output),
+        "--log_folder",
+        str(log),
+        "--vertebrae_only",
+        "--vertebrae_engine",
+        "shapekit_ordered_core",
+        "--ordered_core_source",
+        str(impl),
+        "--cpu_count",
+        "1",
+    ]
+    first = subprocess.run(
+        cmd, cwd=REPO, capture_output=True, text=True, timeout=60, check=False
+    )
+    assert first.returncode == 23, first.stderr or first.stdout
+    before = (output / "case_a/workflow_report.json").read_bytes()
+    assert not (output / "case_z").exists()
+    assert list((output / ".incomplete").glob("case_z-*"))
+    marker.unlink()
+    resumed = subprocess.run(
+        [*cmd, "--continue_prediction"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    summary = [
+        json.loads(line) for line in resumed.stdout.splitlines() if line.startswith("{")
+    ]
+    assert {e["case"] for e in summary if e.get("resumed")} == {"case_a"}
+    assert (output / "case_a/workflow_report.json").read_bytes() == before
+    assert (output / "case_z/workflow_report.json").is_file()
